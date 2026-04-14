@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:aorandra/screens/profile/profile_screen.dart';
+import 'package:aorandra/features/profile/ui/profile_screen.dart';
 
 class CommentsScreen extends StatefulWidget {
   final String postId;

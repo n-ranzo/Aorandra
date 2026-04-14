@@ -8,15 +8,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // CONTROLLER
-import 'package:aorandra/screens/profile/controller/profile_controller.dart';
+import 'package:aorandra/features/profile/logic/profile_controller.dart';
 
 // WIDGETS
-import 'package:aorandra/core/glass/glass_container.dart';
+import 'package:aorandra/core/utils/glass_container.dart';
 
 // SCREENS
-import 'package:aorandra/screens/profile/edit_profile_screen.dart';
-import 'package:aorandra/settings/settings_screen.dart';
-import 'package:aorandra/screens/chat/chat_list_screen.dart';
+import 'package:aorandra/features/profile/ui/edit_profile_screen.dart';
+import 'package:aorandra/features/settings/ui/settings_screen.dart';
+import 'package:aorandra/features/chat/ui/chat_list_screen.dart';
 
 // ================================
 // ENUMS
@@ -87,61 +87,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ================================
 
   /// Allow user to select and upload a new profile image
-  Future<void> _changeProfileImage() async {
-    if (!_isMe || _isUploadingImage) return;
+ /// Uploads the selected image to Supabase and updates the profile data.
+  /// This version is optimized for the Real-time UserAvatar system.
+ Future<void> _changeProfileImage() async {
+  // 1. Prevent multiple clicks or unauthorized uploads
+  if (!_isMe || _isUploadingImage) return;
 
-    final picker = ImagePicker();
+  final ImagePicker picker = ImagePicker();
 
-    try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
+  try {
+    // 2. Pick the image from gallery
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+    );
 
-      if (pickedFile == null) return;
+    if (pickedFile == null) return;
 
-      setState(() => _isUploadingImage = true);
+    setState(() => _isUploadingImage = true);
 
-      final file = File(pickedFile.path);
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final userId = _supabase.auth.currentUser!.id;
-      final filePath = '$userId/$fileName';
+    final File file = File(pickedFile.path);
+    final String userId = _supabase.auth.currentUser!.id;
 
-      // Upload image to Supabase Storage
-      await _supabase.storage.from('avatars').upload(
-        filePath,
-        file,
-        fileOptions: const FileOptions(upsert: true),
-      );
+    // 3. Create a unique path
+    final String fileName =
+        '${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final String filePath = '$userId/$fileName';
 
-      // Get public URL for the uploaded image
-      final String imageUrl =
-          _supabase.storage.from('avatars').getPublicUrl(filePath);
+    // 4. Upload
+    await _supabase.storage.from('avatars').upload(
+      filePath,
+      file,
+      fileOptions: const FileOptions(upsert: true),
+    );
 
-      // Update user record with new image URL
-      await _supabase.from('users').update({
-        'image': imageUrl,
-      }).eq('id', userId);
+    // 5. Get URL
+    final String imageUrl =
+        _supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      // Clear image cache to force UI refresh
-      imageCache.clear();
-      imageCache.clearLiveImages();
+    // 6. Update DB
+    await _supabase.from('profiles').update({
+      'avatar_url': imageUrl,
+    }).eq('id', userId);
 
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to update profile image'),
+    // ✅ FIX هنا (SnackBar)
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Profile picture updated successfully!'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(
+            bottom: 100, // ← يرفعه فوق النافبار
+            left: 16,
+            right: 16,
           ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploadingImage = false);
-      }
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: Colors.black.withOpacity(0.9),
+        ),
+      );
+    }
+
+  } catch (e) {
+    debugPrint('UPLOAD ERROR: $e');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to update image. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(
+            bottom: 100,
+            left: 16,
+            right: 16,
+          ),
+        ),
+      );
+    }
+
+  } finally {
+    if (mounted) {
+      setState(() => _isUploadingImage = false);
     }
   }
+}
 
   /// Launch external URL in browser or appropriate app
   Future<void> _openLink(String url) async {
@@ -190,166 +220,179 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Handle follow button tap based on current state
   Future<void> _handleFollowTap(
-    FollowState state,
-    Map<String, dynamic> targetData,
-  ) async {
-    final bool isPrivate = targetData['isPrivate'] ?? false;
+  FollowState state,
+  Map<String, dynamic> targetData,
+) async {
+  final bool isPrivate = targetData['isPrivate'] ?? false;
 
-    try {
-      if (state == FollowState.blocked) {
-        final blocked = List.from(targetData['blockedUsers'] ?? []);
-        blocked.remove(_currentUserId);
+  try {
+    // ================= UNBLOCK =================
+    if (state == FollowState.blocked) {
+      final blocked = List.from(targetData['blockedUsers'] ?? []);
+      blocked.remove(_currentUserId);
 
-        await _supabase
-            .from('users')
-            .update({'blockedUsers': blocked}).eq('id', widget.userId);
+      await _supabase
+          .from('profiles')
+          .update({'blockedUsers': blocked})
+          .eq('id', widget.userId);
 
-        return;
-      }
+      return;
+    }
 
-      if (state == FollowState.notFollowing) {
-        if (isPrivate) {
-          final requests = List.from(targetData['followRequests'] ?? []);
-          if (!requests.contains(_currentUserId)) {
-            requests.add(_currentUserId);
-          }
-
-          await _supabase
-              .from('users')
-              .update({'followRequests': requests}).eq('id', widget.userId);
-        } else {
-          final followers = List.from(targetData['followersList'] ?? []);
-          if (!followers.contains(_currentUserId)) {
-            followers.add(_currentUserId);
-          }
-
-          await _supabase.from('users').update({
-            'followersList': followers,
-            'followers': (targetData['followers'] ?? 0) + 1,
-          }).eq('id', widget.userId);
-
-          final currentUser = await _supabase
-              .from('users')
-              .select()
-              .eq('id', _currentUserId)
-              .single();
-
-          final following = List.from(currentUser['followingList'] ?? []);
-          if (!following.contains(widget.userId)) {
-            following.add(widget.userId);
-          }
-
-          await _supabase.from('users').update({
-            'followingList': following,
-            'following': (currentUser['following'] ?? 0) + 1,
-          }).eq('id', _currentUserId);
+    // ================= FOLLOW =================
+    if (state == FollowState.notFollowing) {
+      if (isPrivate) {
+        final requests = List.from(targetData['followRequests'] ?? []);
+        if (!requests.contains(_currentUserId)) {
+          requests.add(_currentUserId);
         }
 
-        return;
-      }
-
-      if (state == FollowState.requested) {
-        final requests = List.from(targetData['followRequests'] ?? []);
-        requests.remove(_currentUserId);
-
         await _supabase
-            .from('users')
-            .update({'followRequests': requests}).eq('id', widget.userId);
+            .from('profiles')
+            .update({'followRequests': requests})
+            .eq('id', widget.userId);
 
-        return;
+      } else {
+        // 🔥 target user
+        final followers = List.from(targetData['followersList'] ?? []);
+        if (!followers.contains(_currentUserId)) {
+          followers.add(_currentUserId);
+        }
+
+        await _supabase.from('profiles').update({
+          'followersList': followers,
+          'followers': (targetData['followers'] ?? 0) + 1,
+        }).eq('id', widget.userId);
+
+        // 🔥 current user
+        final currentUser = await _supabase
+            .from('profiles')
+            .select()
+            .eq('id', _currentUserId)
+            .single();
+
+        final following = List.from(currentUser['followingList'] ?? []);
+        if (!following.contains(widget.userId)) {
+          following.add(widget.userId);
+        }
+
+        await _supabase.from('profiles').update({
+          'followingList': following,
+          'following': (currentUser['following'] ?? 0) + 1,
+        }).eq('id', _currentUserId);
       }
 
-      if (state == FollowState.following) {
-        _showFollowingOptions();
-      }
-    } catch (e) {
-      debugPrint('FOLLOW ACTION ERROR: $e');
+      return;
     }
+
+    // ================= CANCEL REQUEST =================
+    if (state == FollowState.requested) {
+      final requests = List.from(targetData['followRequests'] ?? []);
+      requests.remove(_currentUserId);
+
+      await _supabase
+          .from('profiles')
+          .update({'followRequests': requests})
+          .eq('id', widget.userId);
+
+      return;
+    }
+
+    // ================= FOLLOWING =================
+    if (state == FollowState.following) {
+      _showFollowingOptions();
+    }
+
+  } catch (e) {
+    debugPrint('FOLLOW ACTION ERROR: $e');
   }
+}
 
   /// Unfollow the target user
   Future<void> _unfollowUser() async {
-    try {
-      final targetUser = await _supabase
-          .from('users')
-          .select()
-          .eq('id', widget.userId)
-          .single();
+  try {
+    final targetUser = await _supabase
+        .from('profiles')
+        .select()
+        .eq('id', widget.userId)
+        .single();
 
-      final currentUser = await _supabase
-          .from('users')
-          .select()
-          .eq('id', _currentUserId)
-          .single();
+    final currentUser = await _supabase
+        .from('profiles')
+        .select()
+        .eq('id', _currentUserId)
+        .single();
 
-      final followers = List.from(targetUser['followersList'] ?? []);
-      followers.remove(_currentUserId);
+    final followers = List.from(targetUser['followersList'] ?? []);
+    followers.remove(_currentUserId);
 
-      final following = List.from(currentUser['followingList'] ?? []);
-      following.remove(widget.userId);
+    final following = List.from(currentUser['followingList'] ?? []);
+    following.remove(widget.userId);
 
-      await _supabase.from('users').update({
-        'followersList': followers,
-        'followers': ((targetUser['followers'] ?? 0) - 1).clamp(0, 999999999),
-      }).eq('id', widget.userId);
+    await _supabase.from('profiles').update({
+      'followersList': followers,
+      'followers': ((targetUser['followers'] ?? 0) - 1).clamp(0, 999999999),
+    }).eq('id', widget.userId);
 
-      await _supabase.from('users').update({
-        'followingList': following,
-        'following': ((currentUser['following'] ?? 0) - 1).clamp(0, 999999999),
-      }).eq('id', _currentUserId);
+    await _supabase.from('profiles').update({
+      'followingList': following,
+      'following': ((currentUser['following'] ?? 0) - 1).clamp(0, 999999999),
+    }).eq('id', _currentUserId);
 
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      debugPrint('UNFOLLOW ERROR: $e');
-    }
+    if (mounted) Navigator.pop(context);
+
+  } catch (e) {
+    debugPrint('UNFOLLOW ERROR: $e');
   }
+}
 
   /// Block the target user
   Future<void> _blockUser() async {
-    try {
-      final targetUser = await _supabase
-          .from('users')
-          .select()
-          .eq('id', widget.userId)
-          .single();
+  try {
+    final targetUser = await _supabase
+        .from('profiles')
+        .select()
+        .eq('id', widget.userId)
+        .single();
 
-      final currentUser = await _supabase
-          .from('users')
-          .select()
-          .eq('id', _currentUserId)
-          .single();
+    final currentUser = await _supabase
+        .from('profiles')
+        .select()
+        .eq('id', _currentUserId)
+        .single();
 
-      final followers = List.from(targetUser['followersList'] ?? []);
-      followers.remove(_currentUserId);
+    final followers = List.from(targetUser['followersList'] ?? []);
+    followers.remove(_currentUserId);
 
-      final requests = List.from(targetUser['followRequests'] ?? []);
-      requests.remove(_currentUserId);
+    final requests = List.from(targetUser['followRequests'] ?? []);
+    requests.remove(_currentUserId);
 
-      final blocked = List.from(targetUser['blockedUsers'] ?? []);
-      if (!blocked.contains(_currentUserId)) {
-        blocked.add(_currentUserId);
-      }
-
-      final following = List.from(currentUser['followingList'] ?? []);
-      following.remove(widget.userId);
-
-      await _supabase.from('users').update({
-        'followersList': followers,
-        'followers': ((targetUser['followers'] ?? 0) - 1).clamp(0, 999999999),
-        'followRequests': requests,
-        'blockedUsers': blocked,
-      }).eq('id', widget.userId);
-
-      await _supabase.from('users').update({
-        'followingList': following,
-        'following': ((currentUser['following'] ?? 0) - 1).clamp(0, 999999999),
-      }).eq('id', _currentUserId);
-
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      debugPrint('BLOCK ERROR: $e');
+    final blocked = List.from(targetUser['blockedUsers'] ?? []);
+    if (!blocked.contains(_currentUserId)) {
+      blocked.add(_currentUserId);
     }
+
+    final following = List.from(currentUser['followingList'] ?? []);
+    following.remove(widget.userId);
+
+    await _supabase.from('profiles').update({
+      'followersList': followers,
+      'followers': ((targetUser['followers'] ?? 0) - 1).clamp(0, 999999999),
+      'followRequests': requests,
+      'blockedUsers': blocked,
+    }).eq('id', widget.userId);
+
+    await _supabase.from('profiles').update({
+      'followingList': following,
+      'following': ((currentUser['following'] ?? 0) - 1).clamp(0, 999999999),
+    }).eq('id', _currentUserId);
+
+    if (mounted) Navigator.pop(context);
+
+  } catch (e) {
+    debugPrint('BLOCK ERROR: $e');
   }
+}
 
   /// Show bottom sheet with unfollow/block options
   void _showFollowingOptions() {
@@ -459,58 +502,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ================================
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+Widget build(BuildContext context) {
+  final theme = Theme.of(context);
 
-    return DefaultTabController(
-      length: 5,
-      child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        body: StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _supabase
-              .from('users')
-              .stream(primaryKey: ['id'])
-              .eq('id', widget.userId),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const SafeArea(
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-
-            final users = snapshot.data!;
-            if (users.isEmpty) {
-              return const SafeArea(
-                child: Center(child: Text('User not found')),
-              );
-            }
-
-            final userData = users.first;
-
-            return SafeArea(
-              child: Column(
-                children: [
-                  const SizedBox(height: 5),
-                  _buildHeader(userData),
-                  const SizedBox(height: 8),
-                  _buildProfile(userData),
-                  const SizedBox(height: 6),
-                  _buildStats(userData),
-                  const SizedBox(height: 6),
-                  _buildButtons(userData),
-                  const SizedBox(height: 4),
-                  _buildBio(userData),
-                  const SizedBox(height: 0),
-                  _buildTabs(userData),
-                  Expanded(child: _buildContent(userData)),
-                ],
-              ),
+  return DefaultTabController(
+    length: 5,
+    child: Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _supabase
+            .from('profiles') // ✅ أهم تعديل
+            .stream(primaryKey: ['id'])
+            .eq('id', widget.userId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const SafeArea(
+              child: Center(child: CircularProgressIndicator()),
             );
-          },
-        ),
+          }
+
+          final users = snapshot.data!;
+          if (users.isEmpty) {
+            return const SafeArea(
+              child: Center(child: Text('User not found')),
+            );
+          }
+
+          final userData = users.first;
+
+          return SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 5),
+                _buildHeader(userData),
+                const SizedBox(height: 8),
+                _buildProfile(userData),
+                const SizedBox(height: 6),
+                _buildStats(userData),
+                const SizedBox(height: 6),
+                _buildButtons(userData),
+                const SizedBox(height: 4),
+                _buildBio(userData),
+                const SizedBox(height: 0),
+                _buildTabs(userData),
+                Expanded(child: _buildContent(userData)),
+              ],
+            ),
+          );
+        },
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ================================
   // UI BUILDERS - HEADER
@@ -570,7 +613,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfile(Map<String, dynamic> data) {
     final theme = Theme.of(context);
-    final String imageUrl = (data['image'] ?? '').toString().trim();
+    final String imageUrl = (data['avatar_url'] ?? '').toString().trim();
 
     return Transform.translate(
       offset: const Offset(0, -18),
@@ -637,10 +680,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context, postSnap) {
         // Count posts for this user only
         final postsCount = postSnap.hasData
-            ? postSnap.data!
-                .where((post) => post['userId'] == widget.userId)
-                .length
-            : 0;
+    ? postSnap.data!
+        .where((post) => post['profile_id'] == widget.userId)
+        .length
+    : 0;
 
         return Transform.translate(
           offset: const Offset(0, -22),
@@ -941,54 +984,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// For better performance with large datasets, consider filtering
   /// at the database level using .eq('type', type) in the query.
   Widget _buildPostsGrid(String type) {
-    final theme = Theme.of(context);
+  final theme = Theme.of(context);
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase.from('posts').stream(primaryKey: ['id']),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+  return StreamBuilder<List<Map<String, dynamic>>>(
+    stream: _supabase.from('posts').stream(primaryKey: ['id']),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return const Center(child: CircularProgressIndicator());
+      }
 
-        final allPosts = snapshot.data!;
+      final allPosts = snapshot.data!;
 
-        // Filter posts by userId and type in Dart
-        final posts = allPosts.where((post) {
-          return post['userId'] == widget.userId && post['type'] == type;
-        }).toList();
+      // ✅ FIX هنا
+      final posts = allPosts.where((post) {
+        return post['profile_id'] == widget.userId &&
+               post['type'] == type;
+      }).toList();
 
-        if (posts.isEmpty) {
-          return const Center(child: Text('No content'));
-        }
+      if (posts.isEmpty) {
+        return const Center(child: Text('No content'));
+      }
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(4),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-          ),
-          itemCount: posts.length,
-          itemBuilder: (context, index) {
-            final data = posts[index];
-            final String imageUrl = (data['imageUrl'] ?? '').toString();
+      return GridView.builder(
+        padding: const EdgeInsets.all(4),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 4,
+          mainAxisSpacing: 4,
+        ),
+        itemCount: posts.length,
+        itemBuilder: (context, index) {
+          final data = posts[index];
+          final String imageUrl = (data['imageUrl'] ?? '').toString();
 
-            return Container(
-              color: theme.brightness == Brightness.dark
-                  ? Colors.white12
-                  : Colors.black12,
-              child: data['type'] == 'video'
-                  ? const Icon(Icons.play_arrow)
-                  : imageUrl.isNotEmpty
-                      ? Image.network(imageUrl, fit: BoxFit.cover)
-                      : const Center(
-                          child: Icon(Icons.image_not_supported_outlined)),
-            );
-          },
-        );
-      },
-    );
-  }
+          return Container(
+            color: theme.brightness == Brightness.dark
+                ? Colors.white12
+                : Colors.black12,
+            child: data['type'] == 'video'
+                ? const Icon(Icons.play_arrow)
+                : imageUrl.isNotEmpty
+                    ? Image.network(imageUrl, fit: BoxFit.cover)
+                    : const Center(
+                        child: Icon(Icons.image_not_supported_outlined)),
+          );
+        },
+      );
+    },
+  );
+}
 
   /// Build glass-styled icon button
   Widget _buildIcon(IconData icon) {

@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 
-import '../../core/utils/ui_controller.dart';
-import '../../core/glass/glass_button.dart';
-import '../../core/glass/glass_container.dart';
-import '../home/home_screen.dart';
+import '../../../core/ui/ui_controller.dart';
+import '../../../shared/widgets/glass_button.dart';
+import '../../../core/utils/glass_container.dart';
+import '../../home/ui/home_screen.dart';
 import 'forgot_password.dart';
 import 'signup_screen.dart';
 
@@ -87,76 +87,78 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Handle user login with email or username
   Future<void> _login() async {
-    final input = _emailController.text.trim().toLowerCase();
-    final password = _passwordController.text.trim();
+  final input = _emailController.text.trim().toLowerCase();
+  final password = _passwordController.text.trim();
 
-    // Validate inputs
+  // ================= VALIDATION =================
+  setState(() {
+    _emailError = _validateInput(input);
+    _passwordError = _validatePassword(password);
+  });
+
+  if (_emailError != null || _passwordError != null) return;
+
+  String emailToUse = input;
+
+  try {
+    setState(() => _isLoading = true);
+
+    // ================= USERNAME LOGIN =================
+    // إذا المستخدم كتب username بدل email
+    if (!input.contains('@')) {
+      final result = await _supabase
+          .from('profiles') // 🔥 FIX
+          .select('email')
+          .eq('username', input)
+          .maybeSingle(); // 🔥 مهم
+
+      if (result == null) {
+        setState(() {
+          _emailError = 'User not found';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      emailToUse = (result['email'] as String).trim().toLowerCase();
+    }
+
+    // ================= AUTH LOGIN =================
+    await _supabase.auth.signInWithPassword(
+      email: emailToUse,
+      password: password,
+    );
+
+    if (!mounted) return;
+
+    // ================= NAVIGATION =================
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const HomeScreen(),
+      ),
+    );
+
+  } on AuthException catch (e) {
     setState(() {
-      _emailError = _validateInput(input);
-      _passwordError = _validatePassword(password);
+      if (e.message.toLowerCase().contains('invalid login')) {
+        _passwordError = 'Wrong email or password';
+      } else {
+        _passwordError = e.message;
+      }
     });
 
-    if (_emailError != null || _passwordError != null) return;
+  } catch (_) {
+    setState(() {
+      _passwordError = 'Something went wrong';
+    });
 
-    String emailToUse = input;
-
-    try {
-      setState(() => _isLoading = true);
-
-      // Handle username lookup: convert username to email via Supabase
-      if (!input.contains('@')) {
-        final result = await _supabase
-            .from('users')
-            .select('email')
-            .eq('username', input)
-            .maybeSingle();
-
-        if (result == null) {
-          setState(() {
-            _emailError = 'User not found';
-            _isLoading = false;
-          });
-          return;
-        }
-
-        emailToUse = (result['email'] as String).trim().toLowerCase();
-      }
-
-      // Sign in with Supabase Auth
-      await _supabase.auth.signInWithPassword(
-        email: emailToUse,
-        password: password,
-      );
-
-      if (!mounted) return;
-
-      // Navigate to home screen on success
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
-        ),
-      );
-    } on AuthException catch (e) {
-      // Handle authentication errors
-      setState(() {
-        if (e.message.toLowerCase().contains('invalid login')) {
-          _passwordError = 'Wrong email or password';
-        } else {
-          _passwordError = e.message;
-        }
-      });
-    } catch (_) {
-      // Handle generic errors
-      setState(() {
-        _passwordError = 'Something went wrong';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   // ================================
   // UI BUILDERS - INPUTS

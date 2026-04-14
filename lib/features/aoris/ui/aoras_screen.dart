@@ -537,7 +537,6 @@ Widget _buildRightActions(Map video) {
  Widget _buildBottomInfo(Map video) {
   final supabase = Supabase.instance.client;
 
-  // 🔥 CURRENT USER
   final currentUserId = supabase.auth.currentUser!.id;
   final isMe = video['user_id'] == currentUserId;
 
@@ -547,18 +546,18 @@ Widget _buildRightActions(Map video) {
     bottom: 56,
     child: FutureBuilder(
       future: supabase
-          .from('profiles') // ✅ FIXED
-          .select('username, avatar_url') // ✅ FIXED
+          .from('profiles') // 🔥 FIX
+          .select('username, avatar_url') // 🔥 FIX
           .eq('id', video['user_id'])
-          .single(),
+          .maybeSingle(), // 🔥 مهم بدل single
       builder: (context, snapshot) {
         String username = "User";
         String? avatar;
 
-        if (snapshot.hasData) {
+        if (snapshot.hasData && snapshot.data != null) {
           final data = snapshot.data as Map;
           username = data['username'] ?? "User";
-          avatar = data['avatar_url']; // ✅ FIXED
+          avatar = data['avatar_url'];
         }
 
         return Column(
@@ -605,7 +604,6 @@ Widget _buildRightActions(Map video) {
 
                 const SizedBox(width: 10),
 
-                // 🔥 FOLLOW OR EMPTY SPACE
                 isMe
                     ? const SizedBox(width: 70)
                     : _glassFollowButton(video['user_id']),
@@ -632,7 +630,6 @@ Widget _buildRightActions(Map video) {
     ),
   );
 }
-
   // ================================
   // UI BUILDERS - MUSIC VINYL
   // ================================

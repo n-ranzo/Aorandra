@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/glass/glass_container.dart';
+import '../../../core/utils/glass_container.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 // ================================
 // EDIT PROFILE SCREEN
@@ -71,27 +72,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // ================================
 
   /// Load current user data from Supabase
-  Future<void> _loadUserData() async {
-    try {
-      final userId = _supabase.auth.currentUser!.id;
+ Future<void> _loadUserData() async {
+  try {
+    final userId = _supabase.auth.currentUser!.id;
 
-      final data = await _supabase
-          .from('users')
-          .select()
-          .eq('id', userId)
-          .single();
+    // ================= GET FROM CACHE FIRST =================
+    final cachedUser = UserManager.instance.getUser(userId);
 
-      _nameController.text = data['name'] ?? '';
-      _usernameController.text = data['username'] ?? '';
-      _bioController.text = data['bio'] ?? '';
-      _linksController.text = data['links'] ?? '';
-      _imageUrl = data['image'];
-
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint('LOAD ERROR: $e');
+    if (cachedUser != null) {
+      _applyUserData(cachedUser);
+      return;
     }
+
+    // ================= FALLBACK: FETCH FROM DB =================
+    final data = await _supabase
+        .from('profiles') // 🔥 مو users
+        .select('id, username, avatar_url, bio, links, name')
+        .eq('id', userId)
+        .single();
+
+    // ================= SAVE TO CACHE =================
+    UserManager.instance.setUser(userId, data);
+
+    _applyUserData(data);
+
+  } catch (e) {
+    debugPrint('LOAD ERROR: $e');
   }
+}
+
+// ================= APPLY DATA =================
+void _applyUserData(Map data) {
+  _nameController.text = data['name'] ?? '';
+  _usernameController.text = data['username'] ?? '';
+  _bioController.text = data['bio'] ?? '';
+  _linksController.text = data['links'] ?? '';
+  _imageUrl = data['avatar_url'] ?? '';
+
+  if (mounted) setState(() {});
+}
 
   // ================================
   // IMAGE UPLOAD
@@ -142,94 +161,111 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   /// Save all profile changes to Supabase
   Future<void> _saveProfile() async {
-    final userId = _supabase.auth.currentUser!.id;
+  final userId = _supabase.auth.currentUser!.id;
 
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+  if (!mounted) return;
+  setState(() => _isLoading = true);
 
-    try {
-      final data = await _supabase
-          .from('users')
+  try {
+    // ================= GET CURRENT DATA (FROM CACHE OR DB) =================
+    Map<String, dynamic>? data =
+        UserManager.instance.getUser(userId);
+
+    if (data == null) {
+      data = await _supabase
+          .from('profiles') // 🔥 FIX TABLE
           .select()
           .eq('id', userId)
           .single();
 
-      final updates = <String, dynamic>{
-        'bio': _bioController.text.trim(),
-        'links': _linksController.text.trim(),
-        'image': _imageUrl,
-      };
+      // save to cache
+      UserManager.instance.setUser(userId, data);
+    }
 
-      final now = DateTime.now();
+    final updates = <String, dynamic>{
+      'bio': _bioController.text.trim(),
+      'links': _linksController.text.trim(),
+      'avatar_url': _imageUrl, // 🔥 FIX FIELD
+    };
 
-      // ================= NAME UPDATE =================
-      if (_nameController.text.trim() != data['name']) {
-        final lastChange = data['name_changed_at'];
+    final now = DateTime.now();
 
-        if (lastChange != null) {
-          final lastDate = DateTime.parse(lastChange);
-          final daysDiff = now.difference(lastDate).inDays;
+    // ================= NAME UPDATE =================
+    if (_nameController.text.trim() != data['name']) {
+      final lastChange = data['name_changed_at'];
 
-          if (daysDiff < 5) {
-            final remaining = 5 - daysDiff;
+      if (lastChange != null) {
+        final lastDate = DateTime.parse(lastChange);
+        final daysDiff = now.difference(lastDate).inDays;
 
-            _showSnackBar('You can change your name after $remaining days');
-            setState(() => _isLoading = false);
-            return;
-          }
-        }
-
-        updates['name'] = _nameController.text.trim();
-        updates['name_changed_at'] = now.toIso8601String();
-      }
-
-      // ================= USERNAME UPDATE =================
-      if (_usernameController.text.trim() != data['username']) {
-        final lastChange = data['username_changed_at'];
-
-        if (lastChange != null) {
-          final lastDate = DateTime.parse(lastChange);
-          final daysDiff = now.difference(lastDate).inDays;
-
-          if (daysDiff < 10) {
-            final remaining = 10 - daysDiff;
-
-            _showSnackBar('You can change your username after $remaining days');
-            setState(() => _isLoading = false);
-            return;
-          }
-        }
-
-        // Check if username is already taken
-        final taken = await _supabase
-            .from('users')
-            .select('id')
-            .eq('username', _usernameController.text.trim())
-            .maybeSingle();
-
-        if (taken != null) {
-          _showSnackBar('Username already taken');
+        if (daysDiff < 5) {
+          final remaining = 5 - daysDiff;
+          _showSnackBar(
+              'You can change your name after $remaining days');
           setState(() => _isLoading = false);
           return;
         }
-
-        updates['username'] = _usernameController.text.trim();
-        updates['username_changed_at'] = now.toIso8601String();
       }
 
-      // Apply all updates
-      await _supabase.from('users').update(updates).eq('id', userId);
-
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } catch (e) {
-      debugPrint('SAVE ERROR: $e');
+      updates['name'] = _nameController.text.trim();
+      updates['name_changed_at'] = now.toIso8601String();
     }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
+    // ================= USERNAME UPDATE =================
+    if (_usernameController.text.trim() != data['username']) {
+      final lastChange = data['username_changed_at'];
+
+      if (lastChange != null) {
+        final lastDate = DateTime.parse(lastChange);
+        final daysDiff = now.difference(lastDate).inDays;
+
+        if (daysDiff < 10) {
+          final remaining = 10 - daysDiff;
+          _showSnackBar(
+              'You can change your username after $remaining days');
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+
+      // ================= CHECK UNIQUE =================
+      final taken = await _supabase
+          .from('profiles') // 🔥 FIX TABLE
+          .select('id')
+          .eq('username', _usernameController.text.trim())
+          .maybeSingle();
+
+      if (taken != null && taken['id'] != userId) {
+        _showSnackBar('Username already taken');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      updates['username'] = _usernameController.text.trim();
+      updates['username_changed_at'] =
+          now.toIso8601String();
     }
+
+    // ================= APPLY UPDATE =================
+    await _supabase
+        .from('profiles') // 🔥 FIX TABLE
+        .update(updates)
+        .eq('id', userId);
+
+    // ================= UPDATE CACHE 🔥 =================
+    UserManager.instance.updateUser(userId, updates);
+
+    if (!mounted) return;
+    Navigator.pop(context, true);
+
+  } catch (e) {
+    debugPrint('SAVE ERROR: $e');
   }
+
+  if (mounted) {
+    setState(() => _isLoading = false);
+  }
+}
 
   /// Display a snackbar message
   void _showSnackBar(String message) {
@@ -537,42 +573,161 @@ class _EditFieldScreen extends StatelessWidget {
 
   /// Check if a username is already taken in the database
   Future<bool> _isUsernameTaken(String username) async {
-    final supabase = Supabase.instance.client;
+  final supabase = Supabase.instance.client;
 
-    final res = await supabase
-        .from('users')
-        .select('id')
-        .eq('username', username)
-        .maybeSingle();
+  final currentUserId = supabase.auth.currentUser?.id;
 
-    return res != null;
-  }
+  final res = await supabase
+      .from('profiles') // 🔥 FIX TABLE
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+
+  // ================= CHECK =================
+  if (res == null) return false;
+
+  // 🔥 IMPORTANT: ignore current user
+  return res['id'] != currentUserId;
+}
 
   // ================================
   // MAIN BUILD METHOD
   // ================================
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final supabase = Supabase.instance.client;
+Widget build(BuildContext context) {
+  final theme = Theme.of(context);
+  final supabase = Supabase.instance.client;
 
-    return Scaffold(
+  return Scaffold(
+    backgroundColor: theme.scaffoldBackgroundColor,
+
+    // ================= APP BAR =================
+    appBar: AppBar(
       backgroundColor: theme.scaffoldBackgroundColor,
+      elevation: 0,
+      centerTitle: true,
 
-      // App Bar with Cancel/Save actions
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        elevation: 0,
-        centerTitle: true,
+      leadingWidth: 100,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: theme.textTheme.bodyLarge?.color,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
 
-        leadingWidth: 100,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 18,
+          color: theme.textTheme.bodyLarge?.color,
+        ),
+      ),
+
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
           child: TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+
+              final userId = supabase.auth.currentUser!.id;
+
+              // ================= CACHE 🔥 =================
+              final data = UserManager.instance.getUser(userId);
+
+              if (data == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("User not loaded")),
+                );
+                return;
+              }
+
+              if (!context.mounted) return;
+
+              final newValue = controller.text.trim();
+
+              // ================= EMPTY USERNAME =================
+              if (title == 'Username' && newValue.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Username cannot be empty'),
+                  ),
+                );
+                return;
+              }
+
+              // ================= NAME VALIDATION =================
+              if (title == 'Name') {
+                final canChange =
+                    _canChangeName(data['name_changed_at']);
+
+                if (!canChange) {
+                  final days =
+                      _remainingNameDays(data['name_changed_at']);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'You can change your name after $days days',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+              }
+
+              // ================= USERNAME VALIDATION =================
+              if (title == 'Username') {
+                final canChange =
+                    _canChangeUsername(data['username_changed_at']);
+
+                if (!canChange) {
+                  final days = _remainingUsernameDays(
+                      data['username_changed_at']);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'You can change your username after $days days',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                // ================= CLEAN USERNAME =================
+                final clean = newValue
+                    .toLowerCase()
+                    .replaceAll(' ', '')
+                    .replaceAll(RegExp(r'[^a-z0-9._]'), '');
+
+                final taken = await _isUsernameTaken(clean);
+
+                if (!context.mounted) return;
+
+                if (taken && clean != data['username']) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Username already taken'),
+                    ),
+                  );
+                  return;
+                }
+
+                controller.text = clean;
+              }
+
+              Navigator.pop(context, true);
+            },
             child: Text(
-              'Cancel',
+              'Save',
               style: TextStyle(
                 color: theme.textTheme.bodyLarge?.color,
                 fontSize: 14,
@@ -580,209 +735,108 @@ class _EditFieldScreen extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    ),
 
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            color: theme.textTheme.bodyLarge?.color,
-          ),
-        ),
+    // ================= BODY =================
+    body: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
 
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton(
-              onPressed: () async {
-                final userId = supabase.auth.currentUser!.id;
+          // ================= INPUT =================
+          GlassContainer(
+            height: title == 'Bio' ? 140 : 70,
+            radius: 25,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
 
-                final data = await supabase
-                    .from('users')
-                    .select()
-                    .eq('id', userId)
-                    .single();
-
-                if (!context.mounted) return;
-
-                final newValue = controller.text.trim();
-
-                if (title == 'Username' && newValue.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Username cannot be empty')),
-                  );
-                  return;
-                }
-
-                // ================= NAME VALIDATION =================
-                if (title == 'Name') {
-                  final canChange = _canChangeName(data['name_changed_at']);
-
-                  if (!canChange) {
-                    final days = _remainingNameDays(data['name_changed_at']);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'You can change your name after $days days',
+                        // TITLE
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withOpacity(0.6),
+                            fontSize: 15,
+                          ),
                         ),
-                      ),
-                    );
-                    return;
-                  }
-                }
 
-                // ================= USERNAME VALIDATION =================
-                if (title == 'Username') {
-                  final canChange =
-                      _canChangeUsername(data['username_changed_at']);
+                        const SizedBox(height: 4),
 
-                  if (!canChange) {
-                    final days =
-                        _remainingUsernameDays(data['username_changed_at']);
+                        // TEXT FIELD
+                        TextField(
+                          controller: controller,
+                          autofocus: true,
+                          maxLines: title == 'Bio' ? 3 : 1,
+                          style: TextStyle(
+                            color: theme.textTheme.bodyLarge?.color,
+                            fontSize: 16,
+                          ),
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            hintText: 'Add $title',
+                            hintStyle: TextStyle(
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.5),
+                            ),
+                          ),
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'You can change your username after $days days',
+                          // ================= REAL-TIME CLEAN =================
+                          onChanged: (value) {
+                            if (title == 'Username') {
+                              final clean = value
+                                  .toLowerCase()
+                                  .replaceAll(' ', '')
+                                  .replaceAll(
+                                      RegExp(r'[^a-z0-9._]'), '');
+
+                              if (clean != value) {
+                                controller.value = TextEditingValue(
+                                  text: clean,
+                                  selection:
+                                      TextSelection.collapsed(
+                                    offset: clean.length,
+                                  ),
+                                );
+                              }
+                            }
+                          },
                         ),
-                      ),
-                    );
-                    return;
-                  }
-
-                  // Sanitize username input
-                  final clean = newValue
-                      .toLowerCase()
-                      .replaceAll(' ', '')
-                      .replaceAll(RegExp(r'[^a-z0-9._]'), '');
-
-                  final taken = await _isUsernameTaken(clean);
-
-                  if (!context.mounted) return;
-
-                  if (taken && clean != data['username']) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Username already taken'),
-                      ),
-                    );
-                    return;
-                  }
-
-                  controller.text = clean;
-                }
-
-                Navigator.pop(context, true);
-              },
-              child: Text(
-                'Save',
-                style: TextStyle(
-                  color: theme.textTheme.bodyLarge?.color,
-                  fontSize: 14,
-                ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
+
+          const SizedBox(height: 10),
+
+          // ================= HELPERS =================
+          if (title == 'Name')
+            const Text(
+              'You can change your name every 5 days',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+
+          if (title == 'Username')
+            const Text(
+              'You can change your username every 10 days',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
         ],
       ),
-
-      // ================= BODY =================
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Input field with glass container
-            GlassContainer(
-              height: title == 'Bio' ? 140 : 70,
-              radius: 25,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Field title label
-                          Text(
-                            title,
-                            style: TextStyle(
-                              color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.6),
-                              fontSize: 15,
-                            ),
-                          ),
-
-                          const SizedBox(height: 4),
-
-                          // Text input field
-                          TextField(
-                            controller: controller,
-                            autofocus: true,
-                            maxLines: title == 'Bio' ? 3 : 1,
-
-                            style: TextStyle(
-                              color: theme.textTheme.bodyLarge?.color,
-                              fontSize: 16,
-                            ),
-
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-
-                              hintText: 'Add $title',
-                              hintStyle: TextStyle(
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withOpacity(0.5),
-                              ),
-                            ),
-
-                            onChanged: (value) {
-                              // Sanitize username in real-time
-                              if (title == 'Username') {
-                                final clean = value
-                                    .toLowerCase()
-                                    .replaceAll(' ', '')
-                                    .replaceAll(RegExp(r'[^a-z0-9._]'), '');
-
-                                if (clean != value) {
-                                  controller.value = TextEditingValue(
-                                    text: clean,
-                                    selection: TextSelection.collapsed(
-                                      offset: clean.length,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            // Helper text for rate limits
-            if (title == 'Name')
-              const Text(
-                'You can change your name every 5 days',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-
-            if (title == 'Username')
-              const Text(
-                'You can change your username every 10 days',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
 }

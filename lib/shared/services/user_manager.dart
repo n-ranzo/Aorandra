@@ -1,64 +1,87 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class UserManager {
+class UserManager extends ChangeNotifier {
   // ================= SINGLETON =================
-  // Global instance (accessible anywhere in the app)
   static final UserManager instance = UserManager._();
   UserManager._();
 
-  // ================= INTERNAL CACHE =================
-  // Stores all users by userId
+  final supabase = Supabase.instance.client;
+
+  // ================= CACHE =================
+  /// Stores users locally (id -> user data)
   final Map<String, Map<String, dynamic>> _users = {};
 
   // ================= SET SINGLE USER =================
-  // Add or update one user
+  /// Add or replace a single user in cache
   void setUser(String userId, Map<String, dynamic> data) {
     _users[userId] = data;
+    notifyListeners(); // 🔥 update UI
   }
 
   // ================= SET MULTIPLE USERS =================
-  // Store a list of users (used after fetching posts)
+  /// Add multiple users at once (used on app start / fetch)
   void setUsers(List users) {
-    _users.clear();
-
     for (var u in users) {
       final id = u['id']?.toString();
       if (id != null) {
         _users[id] = u;
       }
     }
+    notifyListeners(); // 🔥 update UI
+  }
+
+  // ================= UPDATE USER =================
+  /// Merge new data into existing user (Realtime updates)
+  void updateUser(String userId, Map<String, dynamic> newData) {
+    if (_users.containsKey(userId)) {
+      _users[userId] = {
+        ..._users[userId]!,
+        ...newData,
+      };
+    } else {
+      _users[userId] = newData;
+    }
+
+    notifyListeners(); // 🔥 realtime UI update
+  }
+
+  // ================= REMOVE USER =================
+  /// Remove user from cache
+  void removeUser(String userId) {
+    _users.remove(userId);
+    notifyListeners();
   }
 
   // ================= GET USER =================
-  // Returns full user object (or null if not found)
+  /// Get full user object
   Map<String, dynamic>? getUser(String userId) {
     return _users[userId];
   }
 
   // ================= GET ALL USERS =================
-  // Returns all cached users (used in share sheet)
+  /// Get all cached users
   List<Map<String, dynamic>> getAllUsers() {
     return _users.values.toList();
   }
 
   // ================= GET USERNAME =================
-  // Safe username getter
+  /// Safe username getter
   String getUsername(String userId) {
     final user = _users[userId];
-    return user?['username'] ?? 'User';
+    return (user?['username'] ?? 'User').toString();
   }
 
   // ================= GET AVATAR =================
-  // Returns valid avatar URL or empty string
+  /// 🔥 FIXED: Uses avatar_url instead of old 'image'
   String getAvatar(String userId) {
     final user = _users[userId];
 
-    final avatar = (user?['image'] ?? '')
+    final avatar = (user?['avatar_url'] ?? '')
         .toString()
         .trim();
 
-    // Filter invalid values
+    // Validate URL
     if (avatar.isEmpty ||
         avatar == 'null' ||
         !avatar.toLowerCase().startsWith('http')) {
@@ -67,69 +90,33 @@ class UserManager {
 
     return avatar;
   }
-}
 
+  // ================= REALTIME LISTENER =================
+  /// Listen to profile updates from Supabase (Realtime)
+  void listenToProfileChanges() {
+    supabase
+        .channel('profiles_realtime')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'profiles',
+          callback: (payload) {
+            final newData = payload.newRecord;
 
+            final userId = newData['id']?.toString();
+            if (userId == null) return;
 
+            // 🔥 update cache instantly
+            updateUser(userId, newData);
+          },
+        )
+        .subscribe();
+  }
 
-
-
-// ================= USER AVATAR WIDGET =================
-class UserAvatar extends StatelessWidget {
-  final String userId;
-  final double size;
-
-  const UserAvatar({
-    super.key,
-    required this.userId,
-    this.size = 36,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    // Get avatar from UserManager
-    final avatar = UserManager.instance.getAvatar(userId);
-
-    return ClipOval(
-      child: avatar.isNotEmpty
-          // ================= NETWORK IMAGE =================
-          ? CachedNetworkImage(
-              imageUrl: avatar,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-
-              // Loading placeholder
-              placeholder: (_, __) => Container(
-                width: size,
-                height: size,
-                color: theme.dividerColor.withOpacity(0.2),
-              ),
-
-              // Error fallback
-              errorWidget: (_, __, ___) => Container(
-                width: size,
-                height: size,
-                color: theme.dividerColor.withOpacity(0.2),
-                child: Icon(
-                  Icons.person,
-                  color: theme.iconTheme.color,
-                ),
-              ),
-            )
-
-          // ================= DEFAULT AVATAR =================
-          : Container(
-              width: size,
-              height: size,
-              color: theme.dividerColor.withOpacity(0.2),
-              child: Icon(
-                Icons.person,
-                color: theme.iconTheme.color,
-              ),
-            ),
-    );
+  // ================= CLEAR CACHE =================
+  /// Clear all cached users (logout / refresh)
+  void clear() {
+    _users.clear();
+    notifyListeners();
   }
 }

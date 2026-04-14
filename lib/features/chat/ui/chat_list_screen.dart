@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'chat_screen.dart';
 import 'new_message_screen.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 class ChatListScreen extends StatefulWidget {
   final String currentUserId;
@@ -39,18 +40,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> loadCurrentUser() async {
-    final data = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', widget.currentUserId)
-        .maybeSingle();
+  final data = await supabase
+      .from('profiles') // 🔥 FIX
+      .select('username')
+      .eq('id', widget.currentUserId)
+      .maybeSingle();
 
-    if (data != null) {
-      setState(() {
-        username = data['username'] ?? "";
-      });
-    }
+  if (data != null) {
+    setState(() {
+      username = data['username'] ?? "";
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -198,63 +199,65 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _chatItem(
-      Map<String, dynamic> chatData, ThemeData theme, bool isDark) {
-    final List participants = chatData['participants'];
+  Map<String, dynamic> chatData,
+  ThemeData theme,
+  bool isDark,
+) {
+  final List participants = chatData['participants'];
 
-    final otherUserId = participants.firstWhere(
-      (id) => id != widget.currentUserId,
-    );
+  final otherUserId = participants.firstWhere(
+    (id) => id != widget.currentUserId,
+  );
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: supabase
-          .from('users')
-          .select()
-          .eq('id', otherUserId)
-          .maybeSingle(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox();
+  final user = UserManager.instance.getUser(otherUserId);
 
-        final username = snapshot.data!['username'] ?? "User";
+  final username = user?['username'] ?? "User";
+  final avatar = user?['avatar_url'] ?? "";
 
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(
-                  currentUserId: widget.currentUserId,
-                  otherUserId: otherUserId,
-                  chatId: chatData['id'],
-                ),
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            currentUserId: widget.currentUserId,
+            otherUserId: otherUserId,
+            chatId: chatData['id'],
+          ),
+        ),
+      );
+    },
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 25,
+            backgroundColor:
+                isDark ? Colors.white24 : Colors.black12,
+            backgroundImage:
+                avatar.isNotEmpty ? NetworkImage(avatar) : null,
+            child: avatar.isEmpty
+                ? const Icon(Icons.person, color: Colors.white)
+                : null,
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Text(
+              username,
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+                fontWeight: FontWeight.bold,
               ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor:
-                      isDark ? Colors.white24 : Colors.black12,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    username,
-                    style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
-        );
-      },
-    );
-  }
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _emptyState(bool isDark) {
     return Center(

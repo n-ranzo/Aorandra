@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/utils/ui_controller.dart';
-import '../../core/glass/glass_button.dart';
-import '../../core/glass/glass_container.dart';
-import '../../widgets/password_rules.dart';
-import '../home/home_screen.dart';
+import '../../../core/ui/ui_controller.dart';
+import '../../../shared/widgets/glass_button.dart';
+import '../../../core/utils/glass_container.dart';
+import 'widgets/password_rules.dart';
+import '../../home/ui/home_screen.dart';
 
 // ================================
 // SIGNUP SCREEN
@@ -115,84 +115,85 @@ class _SignupScreenState extends State<SignupScreen> {
 
   /// Handle user registration with Supabase
   Future<void> _register() async {
-    final username = _usernameController.text.trim().toLowerCase();
-    final email = _emailController.text.trim().toLowerCase();
-    final pass = _passwordController.text.trim();
+  final username = _usernameController.text.trim().toLowerCase();
+  final email = _emailController.text.trim().toLowerCase();
+  final pass = _passwordController.text.trim();
 
-    // Validate all inputs
-    setState(() {
-      _usernameError = _validateUsername(username);
-      _emailError = _validateEmail(email);
-      _passwordError = _validatePassword(pass);
-    });
+  // ================= VALIDATION =================
+  setState(() {
+    _usernameError = _validateUsername(username);
+    _emailError = _validateEmail(email);
+    _passwordError = _validatePassword(pass);
+  });
 
-    if (_usernameError != null ||
-        _emailError != null ||
-        _passwordError != null) {
+  if (_usernameError != null ||
+      _emailError != null ||
+      _passwordError != null) {
+    return;
+  }
+
+  try {
+    setState(() => _isLoading = true);
+
+    // ================= CHECK USERNAME =================
+    final usernameCheck = await _supabase
+        .from('profiles') // 🔥 FIX
+        .select('id')
+        .eq('username', username)
+        .maybeSingle();
+
+    if (usernameCheck != null) {
+      setState(() {
+        _usernameError = 'Username already taken';
+        _isLoading = false;
+      });
       return;
     }
 
-    try {
-      setState(() => _isLoading = true);
+    // ================= SIGN UP =================
+    final res = await _supabase.auth.signUp(
+      email: email,
+      password: pass,
+    );
 
-      // Check username uniqueness in database
-      final usernameCheck = await _supabase
-          .from('users')
-          .select('id')
-          .eq('username', username)
-          .maybeSingle();
+    final userId = res.user?.id ?? res.session?.user.id;
 
-      if (usernameCheck != null) {
-        setState(() {
-          _usernameError = 'Username already taken';
-          _isLoading = false;
-        });
-        return;
-      }
+    if (userId == null) {
+      _showError('Signup failed');
+      return;
+    }
 
-      // Create user account with Supabase Auth
-      final res = await _supabase.auth.signUp(
-        email: email,
-        password: pass,
-      );
+    // ================= CREATE PROFILE =================
+    await _supabase.from('profiles').insert({
+      'id': userId,
+      'username': username,
+      'email': email,
+      'avatar_url': '', // 🔥 optional default
+      'created_at': DateTime.now().toIso8601String(),
+    });
 
-      final userId = res.user?.id ?? res.session?.user.id;
+    if (!mounted) return;
 
-      if (userId == null) {
-        _showError('Signup failed');
-        return;
-      }
+    // ================= NAVIGATION =================
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
 
-      // Insert user profile data into users table
-      await _supabase.from('users').insert({
-        'id': userId,
-        'username': username,
-        'email': email,
-      });
-
-      if (!mounted) return;
-
-      // Navigate to home screen on success
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } on AuthException catch (e) {
-      // Handle authentication errors
-      if (e.message.toLowerCase().contains('already registered')) {
-        setState(() => _emailError = 'Email already in use');
-      } else {
-        _showError(e.message);
-      }
-    } catch (_) {
-      // Handle generic errors
-      _showError('Something went wrong');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+  } on AuthException catch (e) {
+    if (e.message.toLowerCase().contains('already registered')) {
+      setState(() => _emailError = 'Email already in use');
+    } else {
+      _showError(e.message);
+    }
+  } catch (_) {
+    _showError('Something went wrong');
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   /// Display error message in SnackBar
   void _showError(String message) {

@@ -1,7 +1,12 @@
+// ============================
+// PREVIEW SCREEN
+// Shows media before editing/upload
+// ============================
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import '../../services/upload_service.dart';
+import '../../../shared/services/upload_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_screen.dart';
 
@@ -40,21 +45,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
   // ============================
 
   void _loadMedia() {
+    // Dispose old controller before loading new media
     _controller?.dispose();
 
     final file = widget.videos[currentIndex];
+
+    // Detect if file is video
     isVideo = file.path.endsWith(".mp4");
 
     if (isVideo) {
+      // Initialize video player
       _controller = VideoPlayerController.file(file)
         ..initialize().then((_) {
           if (mounted) {
             setState(() {});
-            _controller!.play();
-            _controller!.setLooping(true);
+            _controller!.play(); // Auto play
+            _controller!.setLooping(true); // Loop video
           }
         });
     } else {
+      // Just rebuild for image
       setState(() {});
     }
   }
@@ -83,6 +93,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
   Widget _buildMedia() {
     final file = widget.videos[currentIndex];
 
+    // ============================
+    // Build media widget (video/image)
+    // ============================
     final media = isVideo
         ? (_controller != null && _controller!.value.isInitialized)
             ? FittedBox(
@@ -102,13 +115,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
           );
 
     // ============================
-    // POST MODE (4:5 + lifted up)
+    // POST MODE (4:5 + centered)
     // ============================
     if (widget.type == "post") {
       return Align(
         alignment: Alignment.topCenter,
         child: Padding(
-          padding: const EdgeInsets.only(top: 100), 
+          padding: const EdgeInsets.only(top: 100),
           child: AspectRatio(
             aspectRatio: 4 / 5,
             child: ClipRRect(
@@ -121,15 +134,15 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
 
     // ============================
-    // STORY (FULLSCREEN)
+    // STORY MODE (fullscreen)
     // ============================
     return Positioned.fill(child: media);
   }
 
   // ============================
-  // UPLOAD
+  // UPLOAD FUNCTION
   // ============================
-  
+
   // ignore: unused_element
   Future<void> _upload() async {
   setState(() => isLoading = true);
@@ -138,27 +151,34 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
 
+    // Ensure user is logged in
     if (user == null) throw Exception("User not logged in");
 
     final userId = user.id;
 
+    // ============================
+    // ✅ FETCH USER FROM PROFILES (FIXED)
+    // ============================
     final userData = await supabase
-        .from('users')
-        .select()
+        .from('profiles') // 🔥 FIX
+        .select('username, avatar_url') // 🔥 FIX
         .eq('id', userId)
         .single();
 
     final username = userData['username'] ?? "User";
-    final userImage = userData['image'] ?? "";
+    final userImage = userData['avatar_url'] ?? ""; // 🔥 FIX
 
     List<String> uploadedUrls = [];
 
+    // ============================
+    // UPLOAD FILES
+    // ============================
     for (var file in widget.videos) {
       final url = await UploadService.uploadFile(file, userId);
       uploadedUrls.add(url);
     }
 
-    print("TYPE: ${widget.type}"); // 🔥 مهم للتأكد
+    print("TYPE: ${widget.type}");
 
     // ============================
     // STORY
@@ -190,7 +210,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
 
     // ============================
-    // POST (ONLY IF EXPLICIT)
+    // POST
     // ============================
     else if (widget.type == "post") {
       await supabase.from("posts").insert({
@@ -202,7 +222,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     }
 
     // ============================
-    // UNKNOWN TYPE (DEBUG)
+    // UNKNOWN TYPE
     // ============================
     else {
       throw Exception("Unknown type: ${widget.type}");
@@ -212,6 +232,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   } catch (e) {
     print("UPLOAD ERROR: $e");
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Upload Failed \n$e")),
     );
@@ -219,118 +240,121 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   if (mounted) setState(() => isLoading = false);
 }
+
   // ============================
   // UI
   // ============================
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Colors.black,
-    body: Stack(
-      children: [
-        // MEDIA
-        _buildMedia(),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // ============================
+          // MEDIA DISPLAY
+          // ============================
+          _buildMedia(),
 
-        // ============================
-        // CLOSE BUTTON (MATCH CAMERA)
-        // ============================
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 10, 
-          left: 16,
-          child: GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(
-              Icons.close,
-              color: Colors.white,
-              size: 28, 
-            ),
-          ),
-        ),
-
-        // ============================
-        // NEXT BUTTON
-        // ============================
-        Positioned(
-          bottom: 40,
-          right: 20,
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditScreen(
-                    videos: widget.videos,
-                    type: widget.type,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 14,
-              ),
-              decoration: BoxDecoration(
+          // ============================
+          // CLOSE BUTTON
+          // ============================
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 16,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: const Icon(
+                Icons.close,
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: const Row(
-                children: [
-                  Text(
-                    "Next",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(Icons.arrow_forward, color: Colors.black),
-                ],
+                size: 28,
               ),
             ),
           ),
-        ),
 
-        // ============================
-        // MEDIA LIST (THUMBNAILS)
-        // ============================
-        Positioned(
-          bottom: 110,
-          left: 0,
-          right: 0,
-          child: SizedBox(
-            height: 70,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: widget.videos.length,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () => _changeMedia(index),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    width: 60,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: currentIndex == index
-                            ? Colors.white
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.videocam,
-                      color: Colors.white,
+          // ============================
+          // NEXT BUTTON (GO TO EDIT)
+          // ============================
+          Positioned(
+            bottom: 40,
+            right: 20,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditScreen(
+                      videos: widget.videos,
+                      type: widget.type,
                     ),
                   ),
                 );
               },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: const Row(
+                  children: [
+                    Text(
+                      "Next",
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Icon(Icons.arrow_forward, color: Colors.black),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+
+          // ============================
+          // MEDIA THUMBNAILS LIST
+          // ============================
+          Positioned(
+            bottom: 110,
+            left: 0,
+            right: 0,
+            child: SizedBox(
+              height: 70,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.videos.length,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onTap: () => _changeMedia(index),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 5),
+                      width: 60,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: currentIndex == index
+                              ? Colors.white
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.videocam,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

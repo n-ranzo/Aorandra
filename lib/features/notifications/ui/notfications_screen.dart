@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -143,135 +144,130 @@ class NotificationTile extends StatelessWidget {
 
   const NotificationTile({super.key, required this.notif});
 
-  @override
-  Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-    final theme = Theme.of(context);
+ @override
+Widget build(BuildContext context) {
+  final supabase = Supabase.instance.client;
+  final theme = Theme.of(context);
 
-    return FutureBuilder(
-      future: supabase
-          .from('users')
-          .select('username, image')
-          .eq('id', notif['sender_id'])
-          .single(),
-      builder: (context, snapshot) {
-        String username = "User";
-        String? avatar;
+  return AnimatedBuilder(
+    animation: UserManager.instance,
+    builder: (context, _) {
 
-        if (snapshot.hasData) {
-          final user = snapshot.data as Map;
-          username = user['username'] ?? "User";
-          avatar = user['image'];
-        }
+      // ================= GET USER FROM CACHE =================
+      final user = UserManager.instance.getUser(notif['sender_id']);
 
-        final type = notif["type"];
+      final username = user?['username'] ?? "User";
+      final avatar = user?['avatar_url'] ?? "";
 
-        // ================= FOLLOW REQUEST =================
-        if (type == "follow_request") {
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: avatar != null && avatar.isNotEmpty
-                  ? NetworkImage(avatar)
-                  : null,
-              child: avatar == null || avatar.isEmpty
-                  ? const Icon(Icons.person)
-                  : null,
-            ),
-            title: Text(
-              "$username requested to follow you",
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ACCEPT
-                TextButton(
-                  onPressed: () async {
-                    final currentUser =
-                        supabase.auth.currentUser?.id;
+      final type = notif["type"];
 
-                    await supabase.from('followers').insert({
-                      'follower_id': notif['sender_id'],
-                      'following_id': currentUser,
-                    });
-
-                    await supabase
-                        .from('notifications')
-                        .delete()
-                        .eq('id', notif['id']);
-
-                    await supabase.from('notifications').insert({
-                      'user_id': notif['sender_id'],
-                      'sender_id': currentUser,
-                      'type': 'follow_accept',
-                      'created_at':
-                          DateTime.now().toIso8601String(),
-                    });
-                  },
-                  child: const Text("Accept"),
-                ),
-
-                // DELETE
-                TextButton(
-                  onPressed: () async {
-                    await supabase
-                        .from('notifications')
-                        .delete()
-                        .eq('id', notif['id']);
-                  },
-                  child: const Text("Delete"),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // ================= NORMAL NOTIFICATIONS =================
-
-        String text = "";
-
-        if (type == "like") {
-          text = "liked your post";
-        } else if (type == "comment") {
-          text = "commented on your post";
-        } else if (type == "follow") {
-          text = "started following you";
-        } else if (type == "follow_accept") {
-          text = "accepted your follow request";
-        }
-
+      // ================= FOLLOW REQUEST =================
+      if (type == "follow_request") {
         return ListTile(
           leading: CircleAvatar(
-            backgroundImage: avatar != null && avatar.isNotEmpty
+            backgroundImage: avatar.isNotEmpty
                 ? NetworkImage(avatar)
                 : null,
-            child: avatar == null || avatar.isEmpty
+            child: avatar.isEmpty
                 ? const Icon(Icons.person)
                 : null,
           ),
-          title: RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: "$username ",
-                  style: TextStyle(
-                    color: theme.textTheme.bodyLarge?.color,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextSpan(
-                  text: text,
-                  style: TextStyle(
-                    color: theme.textTheme.bodyMedium?.color,
-                  ),
-                ),
-              ],
+          title: Text(
+            "$username requested to follow you",
+            style: TextStyle(
+              color: theme.textTheme.bodyLarge?.color,
             ),
           ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+
+              // ACCEPT
+              TextButton(
+                onPressed: () async {
+                  final currentUser =
+                      supabase.auth.currentUser?.id;
+
+                  await supabase.from('followers').insert({
+                    'follower_id': notif['sender_id'],
+                    'following_id': currentUser,
+                  });
+
+                  await supabase
+                      .from('notifications')
+                      .delete()
+                      .eq('id', notif['id']);
+
+                  await supabase.from('notifications').insert({
+                    'receiver_id': notif['sender_id'], // 🔥 fix
+                    'sender_id': currentUser,
+                    'type': 'follow_accept',
+                    'created_at':
+                        DateTime.now().toIso8601String(),
+                  });
+                },
+                child: const Text("Accept"),
+              ),
+
+              // DELETE
+              TextButton(
+                onPressed: () async {
+                  await supabase
+                      .from('notifications')
+                      .delete()
+                      .eq('id', notif['id']);
+                },
+                child: const Text("Delete"),
+              ),
+            ],
+          ),
         );
-      },
-    );
-  }
+      }
+
+      // ================= NORMAL NOTIFICATIONS =================
+
+      String text = "";
+
+      if (type == "like") {
+        text = "liked your post";
+      } else if (type == "comment") {
+        text = "commented on your post";
+      } else if (type == "follow") {
+        text = "started following you";
+      } else if (type == "follow_accept") {
+        text = "accepted your follow request";
+      }
+
+      return ListTile(
+        leading: CircleAvatar(
+          backgroundImage: avatar.isNotEmpty
+              ? NetworkImage(avatar)
+              : null,
+          child: avatar.isEmpty
+              ? const Icon(Icons.person)
+              : null,
+        ),
+        title: RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: "$username ",
+                style: TextStyle(
+                  color: theme.textTheme.bodyLarge?.color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextSpan(
+                text: text,
+                style: TextStyle(
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
 }

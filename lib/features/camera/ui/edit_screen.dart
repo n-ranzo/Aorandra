@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../services/upload_service.dart';
+import '../../../shared/services/upload_service.dart';
 
 class EditScreen extends StatefulWidget {
   final List<File>? videos;
@@ -93,41 +93,61 @@ void initState() {
     super.dispose();
   }
 
- Future<void> _uploadFinalPost() async {
+Future<void> _uploadFinalPost() async {
+  // ============================
+  // Start loading state
+  // ============================
   setState(() => isLoading = true);
 
   try {
+    // ============================
+    // Initialize Supabase client
+    // ============================
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
 
+    // ============================
+    // Check if user is logged in
+    // ============================
     if (user == null) {
       throw Exception("User not logged in");
     }
 
     final userId = user.id;
 
+    // ============================
+    // Fetch user data from database
+    // ============================
     final userData = await supabase
-        .from('users')
-        .select()
+        .from('profiles') // 🔥 FIX
+        .select('username, avatar_url') // 🔥 FIX
         .eq('id', userId)
         .single();
 
+    // ============================
+    // Extract username & avatar
+    // ============================
     final username = userData['username'] ?? "User";
-    final userImage = userData['image'] ?? "";
+    final userImage = userData['avatar_url'] ?? ""; // 🔥 FIX
 
+    // ============================
+    // Upload all selected media
+    // ============================
     final List<String> uploadedUrls = [];
 
     for (final file in media) {
+      // Validate file existence
       if (!file.existsSync()) {
         throw Exception("File not found: ${file.path}");
       }
 
+      // Upload file and store URL
       final url = await UploadService.uploadFile(file, userId);
       uploadedUrls.add(url);
     }
 
     // ============================
-    // STORY
+    // STORY MODE
     // ============================
     if (isStoryMode) {
       for (final url in uploadedUrls) {
@@ -143,7 +163,7 @@ void initState() {
     }
 
     // ============================
-    // 🔥 AORAS
+    // 🔥 AORAS MODE
     // ============================
     else if (isAorasMode) {
       for (final url in uploadedUrls) {
@@ -156,21 +176,24 @@ void initState() {
     }
 
     // ============================
-    // ✅ POST (FIXED)
+    // ✅ POST MODE
     // ============================
     else {
       await supabase.from("posts").insert({
         "user_id": userId,
-        "media_url": uploadedUrls.first,
-        "media_urls": uploadedUrls,
+        "media_url": uploadedUrls.first, // First media (cover)
+        "media_urls": uploadedUrls,      // All media
         "caption": captionController.text.trim(),
         "music": selectedMusic,
         "filter": selectedFilter,
-        "type": "post", // 🔥🔥🔥 هذا الحل
+        "type": "post", // Important for filtering posts later
         "created_at": DateTime.now().toUtc().toIso8601String(),
       });
     }
 
+    // ============================
+    // Show success message
+    // ============================
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -185,9 +208,15 @@ void initState() {
       ),
     );
 
+    // ============================
+    // Navigate back to home
+    // ============================
     Navigator.popUntil(context, (route) => route.isFirst);
 
   } catch (e) {
+    // ============================
+    // Error handling
+    // ============================
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -195,6 +224,9 @@ void initState() {
     );
   }
 
+  // ============================
+  // Stop loading state
+  // ============================
   if (mounted) {
     setState(() => isLoading = false);
   }

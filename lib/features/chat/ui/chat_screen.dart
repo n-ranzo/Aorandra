@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
@@ -62,20 +63,34 @@ class _ChatScreenState extends State<ChatScreen> {
   // ===============================
   // LOAD USER
   // ===============================
-  Future<void> loadUser() async {
-    final data = await supabase
-        .from('users')
-        .select()
-        .eq('id', widget.otherUserId)
-        .maybeSingle();
+ Future<void> loadUser() async {
+  final user = UserManager.instance.getUser(widget.otherUserId);
 
-    if (data != null) {
-      setState(() {
-        username = data['username'] ?? "";
-        userTag = data['userTag'] ?? "";
-      });
-    }
+  if (user != null) {
+    setState(() {
+      username = user['username'] ?? "";
+      userTag = user['userTag'] ?? "";
+    });
+    return;
   }
+
+  // fallback إذا مش موجود بالكاش
+  final data = await supabase
+      .from('profiles')
+      .select('id, username, userTag, avatar_url')
+      .eq('id', widget.otherUserId)
+      .maybeSingle();
+
+  if (data != null && mounted) {
+    // 🔥 خزنه بالكاش
+    UserManager.instance.setUser(widget.otherUserId, data);
+
+    setState(() {
+      username = data['username'] ?? "";
+      userTag = data['userTag'] ?? "";
+    });
+  }
+}
 
   // ===============================
   // SEND MESSAGE

@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/utils/ui_controller.dart';
-import '../../core/glass/glass_button.dart';
-import '../../core/glass/glass_container.dart';
+import '../../../core/ui/ui_controller.dart';
+import '../../../shared/widgets/glass_button.dart';
+import '../../../core/utils/glass_container.dart';
 import 'reset_password_screen.dart';
 
 

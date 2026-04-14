@@ -2,8 +2,8 @@
 
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
-import '../utils/ui_controller.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/ui/ui_controller.dart';
 
 /// GlassButton - A glassmorphism-styled button for Aorandra
 /// 

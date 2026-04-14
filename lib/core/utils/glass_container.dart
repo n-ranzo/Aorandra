@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:aorandra/core/utils/ui_controller.dart';
+import 'package:aorandra/core/ui/ui_controller.dart';
 
 class GlassContainer extends StatelessWidget {
   final Widget child;

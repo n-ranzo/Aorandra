@@ -1,12 +1,12 @@
-import 'dart:async'; // 🔥 NEW
+import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/utils/ui_controller.dart';
-import '../../core/glass/glass_container.dart';
-import '../../core/glass/glass_button.dart';
-import '../../widgets/password_rules.dart';
-import '../auth/login_screen.dart';
+import '../../../core/ui/ui_controller.dart';
+import '../../../core/utils/glass_container.dart';
+import '../../../shared/widgets/glass_button.dart';
+import 'widgets/password_rules.dart';
+import '../ui/login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
@@ -282,49 +282,49 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   // ================= RESET PASSWORD =================
 
   Future<void> resetPassword() async {
-    final newPassword = passwordController.text.trim();
+  final newPassword = passwordController.text.trim();
 
-    if (!isVerified) return;
+  if (!isVerified) return;
 
-    if (newPassword.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Password too short")),
-      );
-      return;
-    }
-
-    try {
-      setState(() => isLoading = true);
-
-      await supabase.from('users').update({
-        'password': newPassword,
-      }).eq('email', widget.email);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Password updated successfully 🔥")),
-      );
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Something went wrong"),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-    }
+  if (newPassword.length < 6) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Password too short")),
+    );
+    return;
   }
 
+  try {
+    setState(() => isLoading = true);
+
+    // 🔥 THIS IS THE CORRECT WAY
+    await supabase.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Password updated successfully 🔥")),
+    );
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Something went wrong"),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => isLoading = false);
+    }
+  }
+}
 // ================= UI =================
 
 @override

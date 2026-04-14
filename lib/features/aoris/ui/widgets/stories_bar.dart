@@ -6,61 +6,60 @@ class StoriesBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final supabase = Supabase.instance.client;
+  final user = Supabase.instance.client.auth.currentUser;
+  final supabase = Supabase.instance.client;
 
-    return Container(
-      width: 90,
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2A0000),
-        borderRadius: BorderRadius.circular(25),
-      ),
-      child: Column(
-        children: [
+  return Container(
+    width: 90,
+    padding: const EdgeInsets.symmetric(vertical: 20),
+    decoration: BoxDecoration(
+      color: const Color(0xFF2A0000),
+      borderRadius: BorderRadius.circular(25),
+    ),
+    child: Column(
+      children: [
 
-          // =========================
-          // MY STORY
-          // =========================
-          _myStory(user),
+        // =========================
+        // MY STORY
+        // =========================
+        _myStory(user),
 
-          const SizedBox(height: 20),
+        const SizedBox(height: 20),
 
-          // =========================
-          // REAL USERS LIST (SUPABASE)
-          // =========================
-          Expanded(
-            child: StreamBuilder(
-              stream: supabase
-                  .from('users')
-                  .stream(primaryKey: ['id']),
-              builder: (context, snapshot) {
+        // =========================
+        // REAL USERS LIST (SUPABASE)
+        // =========================
+        Expanded(
+          child: StreamBuilder(
+            stream: supabase
+                .from('profiles') // 🔥 FIX
+                .stream(primaryKey: ['id']),
+            builder: (context, snapshot) {
 
-                if (!snapshot.hasData) {
-                  return const SizedBox();
-                }
+              if (!snapshot.hasData) {
+                return const SizedBox();
+              }
 
-                final users = snapshot.data as List<dynamic>;
+              final users = snapshot.data as List<dynamic>;
 
-                return ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (context, index) {
-                    final userData = users[index];
+              return ListView.builder(
+                itemCount: users.length,
+                itemBuilder: (context, index) {
+                  final userData = users[index];
 
-                    return _storyItem(
-                      name: userData["username"] ?? "User",
-                      imageUrl: userData["image_url"] ?? "",
-                    );
-                  },
-                );
-              },
-            ),
+                  return _storyItem(
+                    name: userData["username"] ?? "User",
+                    imageUrl: userData["avatar_url"] ?? "", // 🔥 FIX
+                  );
+                },
+              );
+            },
           ),
-        ],
-      ),
-    );
-  }
-
+        ),
+      ],
+    ),
+  );
+}
   // =========================
   // MY STORY
   // =========================

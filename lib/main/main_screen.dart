@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 // SCREENS
-import '../screens/home/home_screen.dart';
-import '../screens/aoras/aoras_screen.dart';
-import '../screens/chat/chat_list_screen.dart';
-import '../screens/profile/profile_screen.dart';
+import '../features/home/ui/home_screen.dart';
+import '../features/aoris/ui/aoris_screen.dart';
+import '../features/chat/ui/chat_list_screen.dart';
+import '../features/profile/ui/profile_screen.dart';
 
 /// ===============================
 /// MAIN SCREEN (ROOT NAVIGATION)

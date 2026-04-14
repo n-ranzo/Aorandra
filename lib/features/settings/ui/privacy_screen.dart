@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // WIDGETS
-import 'package:aorandra/core/glass/glass_container.dart';
+import 'package:aorandra/core/utils/glass_container.dart';
 
 class PrivacyScreen extends StatefulWidget {
   const PrivacyScreen({super.key});

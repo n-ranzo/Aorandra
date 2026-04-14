@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../core/glass/glass_container.dart';
+import '../../../core/utils/glass_container.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});

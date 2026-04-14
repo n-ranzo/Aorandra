@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // WIDGETS
-import 'package:aorandra/core/glass/glass_container.dart';
+import 'package:aorandra/core/utils/glass_container.dart';
 
 // AUTH
-import 'package:aorandra/screens/auth/login_screen.dart';
+import 'package:aorandra/features/auth/ui/login_screen.dart';
 
 // SCREENS
 import 'account_screen.dart';

@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // SCREENS
-import 'package:aorandra/screens/chat/chat_screen.dart';
+import 'package:aorandra/features/chat/ui/chat_screen.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 class NewMessageScreen extends StatefulWidget {
   final String currentUserId;
@@ -184,45 +185,44 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
   // ===============================
   // USERS LIST
   // ===============================
-  Widget _buildUsers(ThemeData theme, bool isDark) {
-    return Expanded(
-      child: FutureBuilder<List<Map<String, dynamic>>>(
-        future: supabase.from('users').select(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return Center(
-              child: CircularProgressIndicator(
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-            );
-          }
+ Widget _buildUsers(ThemeData theme, bool isDark) {
+  return Expanded(
+    child: AnimatedBuilder(
+      animation: UserManager.instance,
+      builder: (context, _) {
 
-          final users = snapshot.data!;
+        // ================= GET USERS FROM CACHE =================
+        final users = UserManager.instance.getAllUsers();
 
-          final filteredUsers = users.where((user) {
-            final username = user['username']
-                .toString()
-                .toLowerCase();
+        // ================= FILTER USERS =================
+        final filteredUsers = users.where((user) {
+          final username = (user['username'] ?? "")
+              .toString()
+              .toLowerCase();
 
-            return username.contains(query) &&
-                user['id'] != widget.currentUserId;
-          }).toList();
+          return username.contains(query) &&
+              user['id'] != widget.currentUserId;
+        }).toList();
 
-          if (filteredUsers.isEmpty) {
-            return _emptyState(theme, isDark);
-          }
+        // ================= EMPTY STATE =================
+        if (filteredUsers.isEmpty) {
+          return _emptyState(theme, isDark);
+        }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(10),
-            itemCount: filteredUsers.length,
-            itemBuilder: (context, index) {
-              return _userItem(filteredUsers[index], theme, isDark);
-            },
-          );
-        },
-      ),
-    );
-  }
+        // ================= USERS LIST =================
+        return ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: filteredUsers.length,
+          itemBuilder: (context, index) {
+            final user = filteredUsers[index];
+
+            return _userItem(user, theme, isDark);
+          },
+        );
+      },
+    ),
+  );
+}
 
   // ===============================
   // USER ITEM

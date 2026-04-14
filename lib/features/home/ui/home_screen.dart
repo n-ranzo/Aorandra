@@ -1,42 +1,69 @@
-import 'dart:ui';
-// Dart
+// ================================
+// DART CORE
+// ================================
 import 'dart:async';
+import 'dart:ui';
 
-// Flutter
+// ================================
+// FLUTTER
+// ================================
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-// Backend
+// ================================
+// BACKEND (SUPABASE)
+// ================================
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Media
+// ================================
+// MEDIA (VIDEO / IMAGES)
+// ================================
 import 'package:video_player/video_player.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-// Core UI
-import 'package:aorandra/core/glass/glass_container.dart';
-
-// Controllers
-import 'package:aorandra/screens/home/controller/home_controller.dart';
-
-// Services
-import 'package:aorandra/services/search_history_service.dart';
-import 'package:flutter/services.dart';
-
+// ================================
+// SHARE
+// ================================
 import 'package:share_plus/share_plus.dart';
 
-// Screens
-import 'package:aorandra/screens/home/story_screen.dart';
-import 'package:aorandra/screens/comments/comments_screen.dart';
-import 'package:aorandra/screens/profile/profile_screen.dart';
-import 'package:aorandra/screens/chat/chat_list_screen.dart';
-import 'package:aorandra/screens/post/post_screen.dart';
-import 'package:aorandra/screens/camera/camera_screen.dart';
-import 'package:aorandra/screens/aoras/aoras_screen.dart';
-import 'package:aorandra/screens/notfications/notfications_screen.dart';
-import 'package:aorandra/core/user/user_manager.dart';
+// ================================
+// CORE (GLOBAL UI / CONFIG)
+// ================================
+import 'package:aorandra/core/utils/glass_container.dart';
 
-// Widgets
-import 'package:aorandra/widgets/inputs/story_item.dart';
+// ================================
+// CONTROLLERS
+// ================================
+import 'package:aorandra/features/home/logic/home_controller.dart';
+
+// ================================
+// SERVICES (GLOBAL)
+// ================================
+import 'package:aorandra/shared/services/search_history_service.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
+
+// ================================
+// SHARED WIDGETS
+// ================================
+import 'package:aorandra/shared/widgets/user_avatar.dart'; // 🔥 IMPORTANT
+
+// ================================
+// FEATURE SCREENS
+// ================================
+import 'package:aorandra/features/home/ui/story_screen.dart';
+import 'package:aorandra/features/comments/ui/comments_screen.dart';
+import 'package:aorandra/features/profile/ui/profile_screen.dart';
+import 'package:aorandra/features/chat/ui/chat_list_screen.dart';
+import 'package:aorandra/features/post/ui/post_screen.dart';
+import 'package:aorandra/features/camera/ui/camera_screen.dart';
+import 'package:aorandra/features/aoris/ui/aoris_screen.dart';
+import 'package:aorandra/features/notifications/ui/notfications_screen.dart';
+import 'package:aorandra/features/home/widgets/feed_widget.dart';
+
+// ================================
+// FEATURE WIDGETS
+// ================================
+import 'package:aorandra/features/aoris/ui/widgets/story_item.dart';
 // ================================
 // HOME SCREEN
 // ================================
@@ -233,6 +260,8 @@ void initState() {
   _loadCommentsCounts();
   _loadSavedPosts();
 
+  _loadUsers(); 
+
   searchController.addListener(_onSearchChanged);
 
   _scrollController.addListener(() {
@@ -242,6 +271,20 @@ void initState() {
       headerOffset = (offset * 0.7).clamp(0, 80);
     });
   });
+}
+
+Future<void> _loadUsers() async {
+  try {
+    final data = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url');
+
+    UserManager.instance.setUsers(data);
+
+    if (mounted) setState(() {}); // 🔥 هذا هو الحل
+  } catch (e) {
+    debugPrint("LOAD USERS ERROR: $e");
+  }
 }
 
 void _shareExternally(Map post) {
@@ -272,35 +315,86 @@ void _openShareSheet(Map post) {
 
 // Separate function to call Supabase
 Future<List<dynamic>> _fetchPosts() async {
-  // ================= FETCH POSTS =================
-  // Get all posts ordered by newest first
-  final posts = await supabase
-      .from('posts')
-      .select()
-      .eq('type', 'post')
-      .order('created_at', ascending: false);
+  try {
+    // ============================
+    // 1. FETCH POSTS
+    // ============================
+    // Get all posts ordered by newest first
+    final posts = await supabase
+        .from('posts')
+        .select()
+        .eq('type', 'post') // Only fetch real posts
+        .order('created_at', ascending: false);
 
-  // ================= EXTRACT USER IDS =================
-  // Collect unique user IDs from posts
-  final userIds = posts
-      .map((post) => post['user_id'])
-      .where((id) => id != null)
-      .toSet()
-      .toList();
+    // If no posts, return empty list
+    if (posts.isEmpty) return [];
 
-  // ================= FETCH USERS =================
-  // Fetch all users in one request (better performance)
-  final users = await supabase
-      .from('users')
-      .select()
-      .inFilter('id', userIds);
+    // ============================
+    // 2. EXTRACT UNIQUE USER IDS
+    // ============================
+    // Collect all unique user IDs from posts
+    final userIds = posts
+        .map((post) => post['user_id'])
+        .where((id) => id != null)
+        .toSet() // Remove duplicates
+        .toList();
 
-  // ================= STORE IN USER MANAGER =================
-  // Save users globally instead of local cache
-  UserManager.instance.setUsers(users);
+    // ============================
+    // 3. FETCH USERS (FIXED 🔥)
+    // ============================
+    // IMPORTANT:
+    // We use "profiles" instead of "users"
+    // to keep consistency across the app
+    final users = await supabase
+        .from('profiles') // ✅ unified source
+        .select('id, username, avatar_url')
+        .inFilter('id', userIds);
 
-  // ================= RETURN POSTS =================
-  return posts;
+    // ============================
+    // 4. MAP USERS BY ID
+    // ============================
+    // Convert list of users into a map for fast lookup
+    // Also normalize field names (avatar_url → image)
+    final Map<String, dynamic> usersMap = {
+      for (var user in users)
+        user['id'].toString(): {
+          'id': user['id'],
+          'username': user['username'] ?? 'User',
+          'image': user['avatar_url'] ?? '', // 🔥 unified key
+        }
+    };
+
+    // ============================
+    // 5. MERGE POSTS + USER DATA
+    // ============================
+    // Attach user info directly into each post
+    final enrichedPosts = posts.map((post) {
+      final userId = post['user_id']?.toString();
+
+      return {
+        ...post,
+
+        // Inject user object into post
+        'user': usersMap[userId] ?? {
+          'id': userId,
+          'username': 'User',
+          'image': '',
+        },
+      };
+    }).toList();
+
+    // ============================
+    // 6. RETURN FINAL DATA
+    // ============================
+    return enrichedPosts;
+
+  } catch (e) {
+    // ============================
+    // ERROR HANDLING
+    // ============================
+    print("FETCH POSTS ERROR: $e");
+    return [];
+  }
 }
 
   @override
@@ -703,20 +797,24 @@ Future<void> _loadLikesCounts() async {
   });
 }
 
-  Future<void> _loadMyAvatar() async {
+ Future<void> _loadMyAvatar() async {
   final userId = supabase.auth.currentUser?.id;
   if (userId == null) return;
 
-  final data = await supabase
-      .from('users')
-      .select('image')
-      .eq('id', userId)
-      .single();
+  try {
+    final data = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', userId)
+        .single();
 
-  if (mounted) {
-    setState(() {
-      myAvatar = data['image'] ?? '';
-    });
+    if (mounted) {
+      setState(() {
+        myAvatar = data['avatar_url'] ?? '';
+      });
+    }
+  } catch (e) {
+    debugPrint('Avatar load error: $e');
   }
 }
 
@@ -758,111 +856,146 @@ Future<void> _loadCommentsCounts() async {
   // ================================
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final user = supabase.auth.currentUser;
+Widget build(BuildContext context) {
+  final theme = Theme.of(context);
+  final user = supabase.auth.currentUser;
 
-    if (user == null) {
-      return Center(
-        child: CircularProgressIndicator(
-          color: theme.textTheme.bodyLarge?.color,
-        ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Feed sits behind all other layers
-            if (currentTab == 0) _buildRealFeed(),
-
-            // Story swipe zone - left edge only
-            Positioned(
-              left: 0,
-              width: 80,
-              top: 0,
-              bottom: 0,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragUpdate: (details) {
-                  if (details.delta.dx.abs() > details.delta.dy.abs()) {
-                    setState(() {
-                      storyProgress += details.delta.dx / 300;
-                      storyProgress = storyProgress.clamp(0.0, 1.0);
-                    });
-                  }
-                },
-                onHorizontalDragEnd: (_) {
-                  setState(() {
-                    storyProgress = storyProgress > 0.4 ? 1.0 : 0.0;
-                  });
-                },
-              ),
-            ),
-
-            // Search swipe zone - top edge only
-            // reduced from 150px to 60px to stop blocking feed scroll
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 60,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onVerticalDragUpdate: (details) {
-                  if (details.delta.dy > 3) {
-                    setState(() {
-                      searchProgress += details.delta.dy / 420;
-                      searchProgress = searchProgress.clamp(0.0, 1.0);
-                    });
-                  }
-                },
-                onVerticalDragEnd: (_) {
-                  setState(() {
-                    searchProgress = searchProgress > 0.4 ? 1.0 : 0.0;
-                  });
-                },
-              ),
-            ),
-
-            // Header
-            if (currentTab == 0) _buildHeader(),
-
-            // Story panel
-            if (currentTab == 0) _buildStoryPanel(),
-
-            // Aoras tab
-            if (currentTab == 1)
-             AorasScreen(
-               videos: ['assets/videos/test.mp4'],
-               onShare: (video) => _openShareSheet(video),
-             ),
-
-            // Chat tab
-            if (currentTab == 2) ChatListScreen(currentUserId: user.id),
-
-            // Profile tab
-            if (currentTab == 3)
-              ProfileScreen(username: user.email ?? 'User', userId: user.id),
-
-            // Side panel
-            _buildSidePanel(),
-
-            // Side panel gesture detector
-            _buildSideGestureDetector(),
-
-            // Search sheet
-            _buildSearchSheet(),
-
-            // Bottom navigation bar
-            _buildBottomBar(),
-          ],
-        ),
+  // ================= USER LOADING STATE =================
+  if (user == null) {
+    return Center(
+      child: CircularProgressIndicator(
+        color: theme.textTheme.bodyLarge?.color,
       ),
     );
   }
+
+  return Scaffold(
+    backgroundColor: theme.scaffoldBackgroundColor,
+
+    body: SafeArea(
+      child: Stack(
+        children: [
+
+          // =========================================================
+          // MAIN FEED (HOME TAB)
+          // =========================================================
+          if (currentTab == 0)
+            buildFeed(), // 🔥 Replaced _buildRealFeed()
+
+          // =========================================================
+          // STORY SWIPE ZONE (LEFT EDGE)
+          // Handles horizontal swipe to open stories panel
+          // =========================================================
+          Positioned(
+            left: 0,
+            width: 80,
+            top: 0,
+            bottom: 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragUpdate: (details) {
+                if (details.delta.dx.abs() > details.delta.dy.abs()) {
+                  setState(() {
+                    storyProgress += details.delta.dx / 300;
+                    storyProgress = storyProgress.clamp(0.0, 1.0);
+                  });
+                }
+              },
+              onHorizontalDragEnd: (_) {
+                setState(() {
+                  storyProgress = storyProgress > 0.4 ? 1.0 : 0.0;
+                });
+              },
+            ),
+          ),
+
+          // =========================================================
+          // SEARCH SWIPE ZONE (TOP EDGE)
+          // Handles vertical swipe to open search panel
+          // =========================================================
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 60,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onVerticalDragUpdate: (details) {
+                if (details.delta.dy > 3) {
+                  setState(() {
+                    searchProgress += details.delta.dy / 420;
+                    searchProgress = searchProgress.clamp(0.0, 1.0);
+                  });
+                }
+              },
+              onVerticalDragEnd: (_) {
+                setState(() {
+                  searchProgress = searchProgress > 0.4 ? 1.0 : 0.0;
+                });
+              },
+            ),
+          ),
+
+          // =========================================================
+          // HEADER (VISIBLE ONLY IN HOME TAB)
+          // =========================================================
+          if (currentTab == 0) _buildHeader(),
+
+          // =========================================================
+          // STORY PANEL (SLIDE-IN)
+          // =========================================================
+          if (currentTab == 0) _buildStoryPanel(),
+
+          // =========================================================
+          // AORIS (REELS TAB)
+          // =========================================================
+          if (currentTab == 1)
+            AorasScreen(
+              videos: ['assets/videos/test.mp4'],
+              onShare: (video) => _openShareSheet(video),
+            ),
+
+          // =========================================================
+          // CHAT TAB
+          // =========================================================
+          if (currentTab == 2)
+            ChatListScreen(
+              currentUserId: user.id,
+            ),
+
+          // =========================================================
+          // PROFILE TAB
+          // =========================================================
+          if (currentTab == 3)
+            ProfileScreen(
+              username: user.email ?? 'User',
+              userId: user.id,
+            ),
+
+          // =========================================================
+          // SIDE PANEL (SETTINGS / MENU)
+          // =========================================================
+          _buildSidePanel(),
+
+          // =========================================================
+          // SIDE PANEL GESTURE DETECTOR
+          // =========================================================
+          _buildSideGestureDetector(),
+
+          // =========================================================
+          // SEARCH SHEET (SLIDE DOWN PANEL)
+          // =========================================================
+          _buildSearchSheet(),
+
+          // =========================================================
+          // BOTTOM NAVIGATION BAR
+          // =========================================================
+          _buildBottomBar(),
+        ],
+      ),
+    ),
+  );
+}
 
  Widget _topAction(
   IconData icon,
@@ -1008,9 +1141,12 @@ Widget _buildShareSheet(Map post, ScrollController scrollController) {
                                     // 🔥 AVATAR (FROM MANAGER)
                                     Stack(
                                       children: [
-                                        UserAvatar(
-                                          userId: id,
-                                          size: 56,
+                                        SizedBox(
+                                          width: 56,
+                                          height: 56,
+                                          child: UserAvatar(
+                                            userId: id,
+                                          ),
                                         ),
 
                                         if (isSelected)
@@ -1169,56 +1305,47 @@ Widget _externalApp(
 }
 
 Future<void> _sendToMultipleUsers(Map post) async {
+  // ================= GET CURRENT USER =================
   final senderId = supabase.auth.currentUser?.id;
   if (senderId == null) return;
 
+  // ================= GET MESSAGE TEXT =================
   final message = shareMessageController.text.trim();
 
   try {
-    
-    final int shareCount = selectedUsers.length;
 
-    // UI فقط
-    setState(() {
-      post['shares'] = (post['shares'] ?? 0) + shareCount;
-    });
-
-    
+    // ================= SHARE LOGIC =================
+    // 🔥 Send the post as a message to each selected user
     for (final receiverId in selectedUsers) {
+
       await supabase.from('messages').insert({
         'sender_id': senderId,
         'receiver_id': receiverId,
-        'post_id': post['id'],
+        'post_id': post['id'], // link the post to the message
         'text': message,
         'created_at': DateTime.now().toIso8601String(),
       });
+
+      // 🔥 DEBUG: check if data is being sent correctly
+      debugPrint("SENT TO: $receiverId | POST: ${post['id']}");
     }
 
-    selectedUsers.clear();
-    shareMessageController.clear();
+    // ================= CLEAR UI STATE =================
+    selectedUsers.clear();               // clear selected users
+    shareMessageController.clear();      // clear message input
 
+    // ================= CLOSE SHARE SHEET =================
     Navigator.pop(context);
+
+    // ================= SUCCESS FEEDBACK =================
     _showCenterSentToast();
 
-    
-    final current = await supabase
-        .from('posts')
-        .select('shares')
-        .eq('id', post['id'])
-        .single();
-
-    final currentShares = current['shares'] ?? 0;
-
-    await supabase
-        .from('posts')
-        .update({
-          'shares': currentShares + shareCount 
-        })
-        .eq('id', post['id']);
-
+    // ================= REFRESH FEED =================
+    // reload posts to reflect any changes
     await _manualRefresh();
 
   } catch (e) {
+    // ================= ERROR HANDLING =================
     debugPrint("Send failed: $e");
   }
 }
@@ -1290,340 +1417,53 @@ void _showCenterSentToast() {
   // FEED
   // ================================
 
- Widget _buildRealFeed() {
-  return Positioned.fill(
-    child: FutureBuilder<List<dynamic>>(
-      future: _postsFuture,
-      builder: (context, snapshot) {
+ // ================= FEED =================
+// ================================
+// FEED BUILDER
+// Returns the main feed widget (posts list)
+// ================================
+Widget buildFeed() {
+  return FeedWidget(
+    // ================= DATA =================
+    // Future that fetches posts from backend
+    postsFuture: _postsFuture,
 
-        // ================= LOADING =================
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    // Scroll controller for feed scrolling behavior
+    scrollController: _scrollController,
 
-        // ================= ERROR =================
-        if (snapshot.hasError) {
-          return const Center(child: Text('Error loading feed'));
-        }
+    // ================= STATE =================
+    // Local UI state (optimistic updates)
+    likedPosts: likedPosts,
+    savePosts: savePosts,
+    likesCount: likesCount,
+    commentsCount: commentsCount,
 
-        final posts = snapshot.data ?? [];
-        final theme = Theme.of(context);
+    // ================= MEDIA =================
+    // Controllers for multi-media (carousel inside post)
+    pageControllers: pageControllers,
+    pageIndexes: pageIndexes,
 
-        // ================= EMPTY =================
-        if (posts.isEmpty) return _buildEmptyState();
+    // ================= ACTIONS =================
+    // Pull-to-refresh handler
+    onRefresh: _manualRefresh,
 
-        final double width = MediaQuery.of(context).size.width;
-        final double height = width / (4 / 5);
+    // Reload comments count after opening comments
+    onLoadComments: _loadCommentsCounts,
 
-        return RefreshIndicator(
-          key: _refreshKey,
-          onRefresh: _manualRefresh,
-          color: Colors.white,
-          backgroundColor: Colors.black,
+    // User interactions
+    onLike: _toggleLike,
+    onSave: _toggleSave,
+    onOpenComments: _openComments,
+    onShare: _openShareSheet,
+    onOpenProfile: _goToProfile,
 
-          child: ListView.builder(
-            controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(
-              top: HomeController.headerTop + 80,
-              bottom: 120,
-            ),
-            itemCount: posts.length,
+    // 🔥 Open post options menu (3 dots)
+    onOpenMenu: _openPostMenu,
 
-            itemBuilder: (context, index) {
-              final post = posts[index];
-
-              // ================= BASIC =================
-              final String url = post['media_url'] ?? '';
-              final String userId = post['user_id']?.toString() ?? '';
-              final String postId = post['id']?.toString() ?? '';
-
-              if (userId.isEmpty || postId.isEmpty) {
-                return const SizedBox.shrink();
-              }
-
-              // ✅ USER FROM MANAGER
-              final username =
-                  UserManager.instance.getUsername(userId);
-
-              // ================= MEDIA =================
-              final List<dynamic> mediaList =
-                  post['media_urls'] ?? (url.isNotEmpty ? [url] : []);
-
-              final controller = pageControllers.putIfAbsent(
-                postId,
-                () => PageController(),
-              );
-
-              final currentPage = pageIndexes.putIfAbsent(
-                postId,
-                () => ValueNotifier<int>(0),
-              );
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-
-                    // ================= HEADER =================
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-
-                          // ✅ AVATAR FROM WIDGET
-                          GestureDetector(
-                            onTap: () => _goToProfile(username, userId),
-                            child: UserAvatar(userId: userId),
-                          ),
-
-                          const SizedBox(width: 10),
-
-                          GestureDetector(
-                            onTap: () => _goToProfile(username, userId),
-                            child: Text(
-                              username,
-                              style: TextStyle(
-                                color: theme.textTheme.bodyLarge?.color,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-
-                          const Spacer(),
-
-                          IconButton(
-                            icon: Icon(
-                              Icons.more_horiz,
-                              color: theme.iconTheme.color,
-                            ),
-                            onPressed: () => _openPostMenu(
-                              postId,
-                              userId,
-                              post['caption'] ?? '',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ================= MEDIA =================
-                    if (mediaList.isNotEmpty)
-                      SizedBox(
-                        width: width,
-                        height: height,
-                        child: Stack(
-                          children: [
-
-                            PageView.builder(
-                              controller: controller,
-                              itemCount: mediaList.length,
-                              onPageChanged: (i) =>
-                                  currentPage.value = i,
-                              itemBuilder: (context, i) {
-                                final mediaUrl =
-                                    mediaList[i].toString();
-
-                                final isVideo =
-                                    mediaUrl.toLowerCase().endsWith('.mp4') ||
-                                    mediaUrl.toLowerCase().endsWith('.mov') ||
-                                    mediaUrl.toLowerCase().endsWith('.webm');
-
-                                if (isVideo) {
-                                  return _FeedVideoPlayer(mediaUrl);
-                                }
-
-                                return CachedNetworkImage(
-                                  imageUrl: mediaUrl,
-                                  fit: BoxFit.cover,
-                                );
-                              },
-                            ),
-
-                            if (mediaList.length > 1)
-                              Positioned(
-                                top: 10,
-                                right: 10,
-                                child: ValueListenableBuilder<int>(
-                                  valueListenable: currentPage,
-                                  builder: (_, page, __) {
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${page + 1}/${mediaList.length}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                    // ================= ACTIONS =================
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-
-                          // LIKE
-                          GestureDetector(
-                            onTap: () => _toggleLike(
-                              postId,
-                              likesCount[postId] ??
-                                  post['likes'] ??
-                                  0,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  likedPosts[postId] == true
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: likedPosts[postId] == true
-                                      ? Colors.red
-                                      : theme.iconTheme.color,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${likesCount[postId] ?? post['likes'] ?? 0}',
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(width: 16),
-
-                          // COMMENTS
-                          GestureDetector(
-                            onTap: () async {
-                              await _openComments(postId);
-                              await _loadCommentsCounts();
-                            },
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.mode_comment_outlined,
-                                  color: theme.iconTheme.color,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${commentsCount[postId] ?? 0}',
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(width: 16),
-
-                          // SHARE
-                          GestureDetector(
-                            onTap: () => _openShareSheet(post),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.send,
-                                  color: theme.iconTheme.color,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${post['shares'] ?? 0}',
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyMedium?.color,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const Spacer(),
-
-                          // SAVE
-                          GestureDetector(
-                            onTap: () => _toggleSave(postId),
-                            child: Icon(
-                              savePosts[postId] == true
-                                  ? Icons.bookmark
-                                  : Icons.bookmark_border,
-                              color: theme.iconTheme.color,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ================= LIKES TEXT =================
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        '${likesCount[postId] ?? post['likes'] ?? 0} likes',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: theme.textTheme.bodyLarge?.color,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    // ================= CAPTION =================
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        '$username ${post['caption'] ?? ''}',
-                        style: TextStyle(
-                          color: theme.textTheme.bodyLarge?.color,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    // ================= TIME =================
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        _formatTime(post['created_at']),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.textTheme.bodySmall?.color,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    ),
+    // ================= UTILITIES =================
+    // Format post timestamp (e.g. 5m, 2h, 3d)
+    formatTime: _formatTime,
+    getSharesCount: getSharesCount,
   );
 }
   // ================================
@@ -2284,7 +2124,7 @@ Widget _buildStoryPanel() {
     return FutureBuilder(
       // Server-side search with limit for performance
       future: supabase
-          .from('users')
+          .from('profiles')
           .select()
           .ilike('username', '%$query%')
           .limit(20),
