@@ -481,7 +481,7 @@ Widget _rightMessage(Map data, ThemeData theme) {
                   // 🎤 MIC
                   Icon(
                     Icons.mic,
-                    color: theme.iconTheme.color?.withOpacity(0.6),
+                    color: theme.iconTheme.color?.withValues(alpha: 0.6),
                   ),
 
                   const SizedBox(width: 6),

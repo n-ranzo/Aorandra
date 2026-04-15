@@ -117,8 +117,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         borderRadius: BorderRadius.circular(12),
 
         color: theme.brightness == Brightness.dark
-            ? Colors.white.withOpacity(0.08)
-            : Colors.black.withOpacity(0.05),
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.05),
 
         border: Border.all(
           color: theme.brightness == Brightness.dark
@@ -224,7 +224,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     height: UIController.inputHeight,
     radius: UIController.inputRadius,
     border: Border.all(
-      color: theme.dividerColor.withOpacity(0.2),
+      color: theme.dividerColor.withValues(alpha: 0.2),
       width: 1.2,
     ),
     child: TextField(
@@ -266,7 +266,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             obscurePassword
                 ? Icons.visibility_off
                 : Icons.visibility,
-            color: theme.iconTheme.color?.withOpacity(0.7),
+            color: theme.iconTheme.color?.withValues(alpha: 0.7),
           ),
           onPressed: () {
             setState(() {
@@ -371,7 +371,7 @@ Widget build(BuildContext context) {
                 "Enter the verification code you received",
                 style: TextStyle(
                   color: theme.textTheme.bodyMedium?.color
-                      ?.withOpacity(0.7),
+                      ?.withValues(alpha: 0.7),
                 ),
               ),
 

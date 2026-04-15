@@ -106,6 +106,6 @@ class GlassPreset {
     required this.borderOpacity,
   });
 
-  Color get backgroundColor => Colors.white.withOpacity(opacity);
-  Color get borderColor => Colors.white.withOpacity(borderOpacity);
+  Color get backgroundColor => Colors.white.withValues(alpha: opacity);
+  Color get borderColor => Colors.white.withValues(alpha: borderOpacity);
 }

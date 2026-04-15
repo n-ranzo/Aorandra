@@ -232,7 +232,7 @@ class _SignupScreenState extends State<SignupScreen> {
       border: Border.all(
         color: error != null
             ? Colors.red
-            : theme.dividerColor.withOpacity(0.2),
+            : theme.dividerColor.withValues(alpha: 0.2),
         width: 1.5,
       ),
       child: TextField(
@@ -253,7 +253,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
           // Theme-aware hint color
           hintStyle: TextStyle(
-            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
           ),
 
           // Theme-aware icon color
@@ -269,7 +269,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     _obscurePassword
                         ? Icons.visibility
                         : Icons.visibility_off,
-                    color: theme.iconTheme.color?.withOpacity(0.7),
+                    color: theme.iconTheme.color?.withValues(alpha: 0.7),
                   ),
                 )
               : null,

@@ -144,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          backgroundColor: Colors.black.withOpacity(0.9),
+          backgroundColor: Colors.black.withValues(alpha: 0.9),
         ),
       );
     }
@@ -644,7 +644,7 @@ Widget build(BuildContext context) {
                     width: 90,
                     height: 90,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       shape: BoxShape.circle,
                     ),
                     child: const Center(
@@ -672,18 +672,15 @@ Widget build(BuildContext context) {
   // UI BUILDERS - STATS
   // ================================
 
-  /// Build stats row with posts count (filtered in Dart)
+  /// Build stats row with posts count (filtered in Supabase)
   Widget _buildStats(Map<String, dynamic> userData) {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      // Fetch all posts and filter by userId in Dart
-      stream: _supabase.from('posts').stream(primaryKey: ['id']),
+      stream: _supabase
+          .from('posts')
+          .stream(primaryKey: ['id'])
+          .eq('profile_id', widget.userId),
       builder: (context, postSnap) {
-        // Count posts for this user only
-        final postsCount = postSnap.hasData
-    ? postSnap.data!
-        .where((post) => post['profile_id'] == widget.userId)
-        .length
-    : 0;
+        final postsCount = postSnap.data?.length ?? 0;
 
         return Transform.translate(
           offset: const Offset(0, -22),
@@ -721,8 +718,8 @@ Widget build(BuildContext context) {
             height: 56,
             decoration: BoxDecoration(
               color: theme.brightness == Brightness.dark
-                  ? Colors.white.withOpacity(0.10)
-                  : Colors.black.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.black.withValues(alpha: 0.05),
               shape: BoxShape.circle,
               border: Border.all(
                 color: theme.brightness == Brightness.dark
@@ -941,7 +938,7 @@ Widget build(BuildContext context) {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.lock,
-              color: theme.iconTheme.color?.withOpacity(0.6), size: 60),
+              color: theme.iconTheme.color?.withValues(alpha: 0.6), size: 60),
           const SizedBox(height: 15),
           Text(
             'This account is private',
@@ -955,7 +952,7 @@ Widget build(BuildContext context) {
           Text(
             'Follow to see their content',
             style: TextStyle(
-              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
               fontSize: 13,
             ),
           ),
@@ -979,27 +976,22 @@ Widget build(BuildContext context) {
   }
 
   /// Build grid of posts for a specific type
-  /// 
-  /// Note: Filtering is done in Dart after fetching from Supabase.
-  /// For better performance with large datasets, consider filtering
-  /// at the database level using .eq('type', type) in the query.
   Widget _buildPostsGrid(String type) {
   final theme = Theme.of(context);
 
   return StreamBuilder<List<Map<String, dynamic>>>(
-    stream: _supabase.from('posts').stream(primaryKey: ['id']),
+    stream: _supabase
+        .from('posts')
+        .stream(primaryKey: ['id'])
+        .eq('profile_id', widget.userId),
     builder: (context, snapshot) {
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
 
-      final allPosts = snapshot.data!;
-
-      // ✅ FIX هنا
-      final posts = allPosts.where((post) {
-        return post['profile_id'] == widget.userId &&
-               post['type'] == type;
-      }).toList();
+      final posts = snapshot.data!
+          .where((post) => post['type'] == type)
+          .toList();
 
       if (posts.isEmpty) {
         return const Center(child: Text('No content'));
@@ -1071,7 +1063,7 @@ class _Stat extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
           ),
         ),
       ],

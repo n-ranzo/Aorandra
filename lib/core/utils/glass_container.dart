@@ -74,7 +74,7 @@ class GlassContainer extends StatelessWidget {
                     ? Colors.white.withOpacity(
                         UIController.glassOpacity,
                       )
-                    : Colors.black.withOpacity(0.05),
+                    : Colors.black.withValues(alpha: 0.05),
 
                 /// 🔥 BORDER
                 border: border ??
@@ -83,7 +83,7 @@ class GlassContainer extends StatelessWidget {
                           ? Colors.white.withOpacity(
                               UIController.borderOpacity,
                             )
-                          : Colors.black.withOpacity(0.15),
+                          : Colors.black.withValues(alpha: 0.15),
                       width: UIController.borderWidth,
                     ),
 
@@ -95,7 +95,7 @@ class GlassContainer extends StatelessWidget {
                             ? Colors.black.withOpacity(
                                 UIController.shadowOpacity,
                               )
-                            : Colors.black.withOpacity(0.08),
+                            : Colors.black.withValues(alpha: 0.08),
                         blurRadius: UIController.shadowBlur,
                         offset: Offset(
                           0,

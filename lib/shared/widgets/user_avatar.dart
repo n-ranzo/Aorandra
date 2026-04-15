@@ -65,7 +65,7 @@ class UserAvatar extends StatelessWidget {
             placeholder: (context, url) => Container(
               width: size,
               height: size,
-              color: theme.dividerColor.withOpacity(0.1),
+              color: theme.dividerColor.withValues(alpha: 0.1),
             ),
 
             errorWidget: (context, url, error) =>
@@ -82,13 +82,13 @@ class UserAvatar extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: theme.dividerColor.withOpacity(0.1),
+        color: theme.dividerColor.withValues(alpha: 0.1),
         shape: BoxShape.circle,
       ),
       child: Icon(
         Icons.person,
         size: size * 0.6,
-        color: theme.iconTheme.color?.withOpacity(0.5),
+        color: theme.iconTheme.color?.withValues(alpha: 0.5),
       ),
     );
   }

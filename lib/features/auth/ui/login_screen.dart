@@ -187,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
       border: Border.all(
         color: error != null
             ? Colors.red
-            : theme.dividerColor.withOpacity(0.2),
+            : theme.dividerColor.withValues(alpha: 0.2),
         width: 1.5,
       ),
       child: TextField(
@@ -211,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // Theme-aware hint color
           hintStyle: TextStyle(
-            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
             fontSize: 16,
             height: 1.0,
           ),
@@ -235,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _obscurePassword
                         ? Icons.visibility
                         : Icons.visibility_off,
-                    color: theme.iconTheme.color?.withOpacity(0.7),
+                    color: theme.iconTheme.color?.withValues(alpha: 0.7),
                   ),
                 )
               : null,
@@ -369,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           'Forgot Password?',
                           style: TextStyle(
                             color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.7),
+                                ?.withValues(alpha: 0.7),
                           ),
                         ),
                       ),

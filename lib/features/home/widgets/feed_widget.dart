@@ -148,7 +148,7 @@ class FeedWidget extends StatelessWidget {
                           /// User avatar - Now connected to the smart UserAvatar widget
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor: theme.dividerColor.withOpacity(0.2),
+                            backgroundColor: theme.dividerColor.withValues(alpha: 0.2),
                             backgroundImage: avatar.isNotEmpty
                                 ? NetworkImage(avatar)
                                 : null,

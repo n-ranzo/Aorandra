@@ -543,7 +543,7 @@ Widget _buildPostCounter() {
       width: 34,
       height: 34,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
+        color: Colors.black.withValues(alpha: 0.8),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 1.5),
       ),
@@ -641,7 +641,7 @@ Widget _buildCapture() {
               height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha: 0.08),
               ),
             ),
 
@@ -757,7 +757,7 @@ Widget _buildBottomActions() {
                 vertical: 10,
               ),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(30),
               ),
               child: const Text(
@@ -848,7 +848,7 @@ Widget _buildBottomActions() {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(30),
           ),
           child: Row(

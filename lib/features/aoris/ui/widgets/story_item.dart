@@ -127,9 +127,9 @@ class StoryItem extends StatelessWidget {
       height: 18,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         border: Border.all(
-          color: Colors.white.withOpacity(0.4),
+          color: Colors.white.withValues(alpha: 0.4),
           width: 1,
         ),
       ),

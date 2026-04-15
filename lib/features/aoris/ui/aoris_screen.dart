@@ -573,7 +573,7 @@ Widget _buildRightActions(Map video) {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       width: 1.2,
                     ),
                     image: avatar != null && avatar.isNotEmpty
@@ -684,7 +684,7 @@ Widget _buildRightActions(Map video) {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.06),
+                      color: Colors.white.withValues(alpha: 0.06),
                     ),
                   ),
                 );
@@ -709,7 +709,7 @@ Widget _buildRightActions(Map video) {
                   height: 36,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                   ),
                   child: const Icon(
                     Icons.music_note,
@@ -724,7 +724,7 @@ Widget _buildRightActions(Map video) {
                 height: 5,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.95),
+                  color: Colors.white.withValues(alpha: 0.95),
                 ),
               ),
             ],
@@ -761,9 +761,9 @@ Widget _buildRightActions(Map video) {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.10),
+            color: Colors.white.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.30)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.30)),
           ),
           child: Text(
             isFollowing ? "Following" : "Follow",
@@ -793,10 +793,10 @@ Widget _buildRightActions(Map video) {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withOpacity(0.25),
+                color: Colors.white.withValues(alpha: 0.25),
               ),
             ),
             child: Icon(

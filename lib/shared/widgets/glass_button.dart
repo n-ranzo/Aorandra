@@ -67,8 +67,8 @@ class GlassButton extends StatelessWidget {
             color: AppColors.glass(UIController.buttonOpacity),
             border: Border.all(
               color: isDisabled
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.white.withOpacity(0.3),
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.white.withValues(alpha: 0.3),
               width: 1.2,
             ),
           ),
@@ -76,7 +76,7 @@ class GlassButton extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: isDisabled ? null : onPressed,
-              splashColor: Colors.white.withOpacity(0.1),
+              splashColor: Colors.white.withValues(alpha: 0.1),
               highlightColor: Colors.transparent,
               child: Center(
                 child: isLoading
@@ -112,7 +112,7 @@ class GlassButton extends StatelessWidget {
       text,
       style: TextStyle(
         color: isDisabled
-            ? theme.textTheme.bodyLarge!.color!.withOpacity(0.5)
+            ? theme.textTheme.bodyLarge!.color!.withValues(alpha: 0.5)
             : (textColor ?? theme.textTheme.bodyLarge!.color), // 🔥 FIX
         fontSize: fontSize ?? UIController.buttonTextSize,
         fontWeight: FontWeight.bold,

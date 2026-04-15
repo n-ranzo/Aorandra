@@ -98,7 +98,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               height: 90,
               decoration: BoxDecoration(
                 color: selected
-                    ? Colors.redAccent.withOpacity(0.2)
+                    ? Colors.redAccent.withValues(alpha: 0.2)
                     : theme.cardColor,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(

@@ -375,7 +375,7 @@ Widget _buildHeader() {
             Text(
               'Edit photo',
               style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -422,7 +422,7 @@ Widget _buildHeader() {
                         title,
                         style: TextStyle(
                           color: theme.textTheme.bodyMedium?.color
-                              ?.withOpacity(0.6),
+                              ?.withValues(alpha: 0.6),
                           fontSize: 11,
                         ),
                       ),
@@ -764,7 +764,7 @@ Widget build(BuildContext context) {
                           title,
                           style: TextStyle(
                             color: theme.textTheme.bodyMedium?.color
-                                ?.withOpacity(0.6),
+                                ?.withValues(alpha: 0.6),
                             fontSize: 15,
                           ),
                         ),
@@ -787,7 +787,7 @@ Widget build(BuildContext context) {
                             hintText: 'Add $title',
                             hintStyle: TextStyle(
                               color: theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.5),
+                                  ?.withValues(alpha: 0.5),
                             ),
                           ),
 

@@ -59,11 +59,11 @@ class AppColors {
   static const Color glassBase = Color(0xFFFFFFFF);
 
   static Color glass([double opacity = 0.08]) {
-    return glassBase.withOpacity(opacity);
+    return glassBase.withValues(alpha: opacity);
   }
 
   static Color glassBorder([double opacity = 0.15]) {
-    return glassBase.withOpacity(opacity);
+    return glassBase.withValues(alpha: opacity);
   }
 
   // ================================
@@ -82,6 +82,6 @@ class AppColors {
   // ================================
 
   static Color shadow([double opacity = 0.3]) {
-    return Colors.black.withOpacity(opacity);
+    return Colors.black.withValues(alpha: opacity);
   }
 }

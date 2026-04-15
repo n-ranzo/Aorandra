@@ -138,7 +138,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     border: Border.all(
       color: _emailError != null
           ? Colors.red
-          : theme.dividerColor.withOpacity(0.2),
+          : theme.dividerColor.withValues(alpha: 0.2),
       width: 1.5,
     ),
     child: TextField(
@@ -163,7 +163,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
         /// ✅ FIX HINT
         hintStyle: TextStyle(
-          color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+          color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
         ),
 
         /// ✅ FIX ICON

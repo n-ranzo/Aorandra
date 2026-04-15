@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/config/app_config.dart';
 import 'core/theme/theme_controller.dart';
 import "features/auth/ui/auth_gate.dart";
 
@@ -28,8 +29,8 @@ Future<void> main() async {
 
   // Initialize Supabase client with project credentials
   await Supabase.initialize(
-    url: 'https://nlqhjqlgvmrrfrtpzcrc.supabase.co',
-    anonKey: 'sb_publishable_9VHGrLgJCB7o9OfuTOBEQg_jbpSxlUr',
+    url: AppConfig.supabaseUrl,
+    anonKey: AppConfig.supabaseAnonKey,
   );
 
   // Register ThemeController as a singleton using GetX

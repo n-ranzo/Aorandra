@@ -124,8 +124,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 15),
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.white.withOpacity(0.08)
-              : Colors.black.withOpacity(0.05),
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(
             color: isDark ? Colors.white24 : Colors.black12,
