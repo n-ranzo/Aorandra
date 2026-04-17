@@ -2,6 +2,7 @@
 
 import 'dart:io';
 
+import 'package:aorandra/shared/services/user_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,6 +18,7 @@ import 'package:aorandra/core/utils/glass_container.dart';
 import 'package:aorandra/features/profile/ui/edit_profile_screen.dart';
 import 'package:aorandra/features/settings/ui/settings_screen.dart';
 import 'package:aorandra/features/chat/ui/chat_list_screen.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 // ================================
 // ENUMS
@@ -65,6 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
   late final String _currentUserId;
   bool _isUploadingImage = false;
+  bool _isBioExpanded = false;
 
   // ================================
   // HELPERS
@@ -126,10 +129,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _supabase.storage.from('avatars').getPublicUrl(filePath);
 
     // 6. Update DB
-    await _supabase.from('profiles').update({
-      'avatar_url': imageUrl,
-    }).eq('id', userId);
-
+    await _supabase.from('profiles').upsert({
+  'id': userId,
+  'avatar_url': imageUrl,
+});
     // ✅ FIX هنا (SnackBar)
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -154,10 +157,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to update image. Please try again.'),
+        const SnackBar(
+          content: Text('Failed to update image. Please try again.'),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.only(
+          margin: EdgeInsets.only(
             bottom: 100,
             left: 16,
             right: 16,
@@ -253,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .eq('id', widget.userId);
 
       } else {
-        // 🔥 target user
+        // target user
         final followers = List.from(targetData['followersList'] ?? []);
         if (!followers.contains(_currentUserId)) {
           followers.add(_currentUserId);
@@ -264,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'followers': (targetData['followers'] ?? 0) + 1,
         }).eq('id', widget.userId);
 
-        // 🔥 current user
+        // current user
         final currentUser = await _supabase
             .from('profiles')
             .select()
@@ -501,7 +504,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // MAIN BUILD METHOD
   // ================================
 
-  @override
+ @override
 Widget build(BuildContext context) {
   final theme = Theme.of(context);
 
@@ -511,42 +514,89 @@ Widget build(BuildContext context) {
       backgroundColor: theme.scaffoldBackgroundColor,
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _supabase
-            .from('profiles') // ✅ أهم تعديل
+            .from('profiles')
             .stream(primaryKey: ['id'])
             .eq('id', widget.userId),
         builder: (context, snapshot) {
+          // ================= LOADING =================
           if (!snapshot.hasData) {
             return const SafeArea(
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
             );
           }
 
+          // ================= NO USER =================
           final users = snapshot.data!;
           if (users.isEmpty) {
             return const SafeArea(
-              child: Center(child: Text('User not found')),
+              child: Center(
+                child: Text('User not found'),
+              ),
             );
           }
 
           final userData = users.first;
+          UserManager.instance.setUsers([userData]);
 
-          return SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 5),
-                _buildHeader(userData),
-                const SizedBox(height: 8),
-                _buildProfile(userData),
-                const SizedBox(height: 6),
-                _buildStats(userData),
-                const SizedBox(height: 6),
-                _buildButtons(userData),
-                const SizedBox(height: 4),
-                _buildBio(userData),
-                const SizedBox(height: 0),
-                _buildTabs(userData),
-                Expanded(child: _buildContent(userData)),
-              ],
+          // ================= MAIN UI =================
+          return Scaffold(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            body: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverToBoxAdapter(
+                    child: SafeArea(
+                      bottom: false,
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 5),
+
+                          // Header
+                          _buildHeader(userData),
+
+                          const SizedBox(height: 8),
+
+                          // Profile image + name
+                          _buildProfile(userData),
+
+                          const SizedBox(height: 6),
+
+                          // Stats
+                          _buildStats(userData),
+
+                          const SizedBox(height: 6),
+
+                          // Buttons
+                          _buildButtons(userData),
+
+                          const SizedBox(height: 4),
+
+                          // Bio + link
+                          _buildBio(userData),
+
+                          const SizedBox(height: 6),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Sticky tabs
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _TabBarDelegate(
+                      Container(
+                        color: theme.scaffoldBackgroundColor,
+                        child: _buildTabs(userData),
+                      ),
+                    ),
+                  ),
+                ];
+              },
+
+              // Content under tabs
+              body: _buildContent(userData),
             ),
           );
         },
@@ -560,113 +610,125 @@ Widget build(BuildContext context) {
   // ================================
 
   Widget _buildHeader(Map<String, dynamic> data) {
-    final theme = Theme.of(context);
-    final bool isPrivate = data['isPrivate'] ?? false;
+  final theme = Theme.of(context);
+  final bool isPrivate = data['isPrivate'] ?? false;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        height: 60,
-        child: Row(
-          children: [
-            Row(
-              children: [
-                Text(
-                  data['username'] ?? data['name'] ?? '',
-                  style: TextStyle(
-                    color: theme.textTheme.bodyLarge?.color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+  final String username = (data['username'] ?? '').toString().trim();
+
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: SizedBox(
+      height: 60,
+      child: Row(
+        children: [
+          Row(
+            children: [
+              Text(
+                username.isEmpty ? 'user' : username, 
+                style: TextStyle(
+                  color: theme.textTheme.bodyLarge?.color,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(width: 6),
-                if (isPrivate)
-                  Icon(
-                    Icons.lock,
-                    size: 16,
-                    color: theme.textTheme.bodyMedium?.color,
-                  ),
-              ],
-            ),
-            const Spacer(),
-            if (_isMe)
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SettingsScreen(),
-                    ),
-                  );
-                },
-                child: _buildIcon(Icons.settings),
               ),
-          ],
-        ),
+              const SizedBox(width: 6),
+              if (isPrivate)
+                Icon(
+                  Icons.lock,
+                  size: 16,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+            ],
+          ),
+          const Spacer(),
+          if (_isMe)
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                );
+              },
+              child: _buildIcon(Icons.settings),
+            ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ================================
   // UI BUILDERS - PROFILE SECTION
   // ================================
 
   Widget _buildProfile(Map<String, dynamic> data) {
-    final theme = Theme.of(context);
-    final String imageUrl = (data['avatar_url'] ?? '').toString().trim();
+  final theme = Theme.of(context);
 
-    return Transform.translate(
-      offset: const Offset(0, -18),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: _isMe ? _changeProfileImage : null,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 45,
-                  backgroundColor: theme.scaffoldBackgroundColor,
-                  backgroundImage: imageUrl.isNotEmpty
-                      ? NetworkImage(
-                          '$imageUrl?v=${DateTime.now().millisecondsSinceEpoch}')
-                      : null,
-                  child: imageUrl.isEmpty
-                      ? Icon(
-                          Icons.person,
-                          size: 40,
-                          color: theme.iconTheme.color,
-                        )
-                      : null,
-                ),
-                if (_isUploadingImage)
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+  final String imageUrl = (data['avatar_url'] ?? '').toString().trim();
+
+  
+  final String name = (data['name'] ?? '').toString().trim();
+
+  return Transform.translate(
+    offset: const Offset(0, -18),
+    child: Column(
+      children: [
+        GestureDetector(
+          onTap: _isMe ? _changeProfileImage : null,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircleAvatar(
+                radius: 45,
+                backgroundColor: theme.scaffoldBackgroundColor,
+                backgroundImage: imageUrl.isNotEmpty
+                    ? NetworkImage(
+                        '$imageUrl?v=${DateTime.now().millisecondsSinceEpoch}')
+                    : null,
+                child: imageUrl.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: 40,
+                        color: theme.iconTheme.color,
+                      )
+                    : null,
+              ),
+
+              // loading overlay
+              if (_isUploadingImage)
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    shape: BoxShape.circle,
                   ),
-              ],
-            ),
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            data['name'] ?? data['username'] ?? '',
-            style: TextStyle(
-              color: theme.textTheme.bodyLarge?.color,
-              fontWeight: FontWeight.w600,
-            ),
+        ),
+
+        const SizedBox(height: 10),
+
+        
+        Text(
+          name,
+          style: TextStyle(
+            color: theme.textTheme.bodyLarge?.color,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(height: 14),
-        ],
-      ),
-    );
-  }
+        ),
+
+        const SizedBox(height: 14),
+      ],
+    ),
+  );
+}
 
   // ================================
   // UI BUILDERS - STATS
@@ -711,7 +773,7 @@ Widget build(BuildContext context) {
     final followState = _getFollowState(data);
     final theme = Theme.of(context);
 
-    Widget _buildAddFriendButton() {
+    Widget buildAddFriendButton() {
       return Transform.translate(
         offset: const Offset(0, -6),
         child: GestureDetector(
@@ -768,7 +830,7 @@ Widget build(BuildContext context) {
                 }),
               ),
               const SizedBox(width: 12),
-              _buildAddFriendButton(),
+              buildAddFriendButton(),
               const SizedBox(width: 12),
               Expanded(child: _buildButton('Share', _onShareTap)),
             ] else ...[
@@ -780,7 +842,7 @@ Widget build(BuildContext context) {
               const SizedBox(width: 12),
               Transform.translate(
                 offset: const Offset(-4, -6),
-                child: _buildAddFriendButton(),
+                child: buildAddFriendButton(),
               ),
               const SizedBox(width: 12),
               if (followState == FollowState.following)
@@ -825,34 +887,69 @@ Widget build(BuildContext context) {
   // UI BUILDERS - BIO & LINKS
   // ================================
 
-  Widget _buildBio(Map<String, dynamic> data) {
-    final theme = Theme.of(context);
+ Widget _buildBio(Map<String, dynamic> data) {
+  final theme = Theme.of(context);
 
-    final bio = data['bio'] ?? '';
-    final link = data['links'] ?? '';
+  final String bio = (data['bio'] ?? '').toString();
+  final String link = (data['links'] ?? '').toString();
 
-    return Transform.translate(
-      offset: const Offset(0, -12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+  final bool isLong = bio.length > 80; 
+
+  return Transform.translate(
+    offset: const Offset(0, -12),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInCubic,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
+            // ================= BIO TEXT =================
             if (bio.isNotEmpty)
               Text(
                 bio,
+                maxLines: _isBioExpanded ? null : 2, 
+                overflow: _isBioExpanded
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: theme.textTheme.bodyMedium?.color,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.9),
                   fontSize: 13,
                   height: 1.5,
                 ),
               ),
+
+            // ================= SEE MORE / HIDE =================
+            if (isLong)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isBioExpanded = !_isBioExpanded;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _isBioExpanded ? 'Hide' : 'See more',
+                    style: TextStyle(
+                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+
+            // ================= LINK =================
             if (link.isNotEmpty) ...[
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: () => _openLink(link),
                 child: Text(
                   link,
+                  softWrap: true,
                   style: const TextStyle(
                     color: Colors.blue,
                     fontSize: 13,
@@ -864,8 +961,9 @@ Widget build(BuildContext context) {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ================================
   // UI BUILDERS - TABS
@@ -987,25 +1085,25 @@ Widget build(BuildContext context) {
   final theme = Theme.of(context);
 
   return StreamBuilder<List<Map<String, dynamic>>>(
-    stream: _supabase.from('posts').stream(primaryKey: ['id']),
+    stream: _supabase
+        .from('posts')
+        .stream(primaryKey: ['id'])
+        .eq('profile_id', widget.userId), 
     builder: (context, snapshot) {
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
 
-      final allPosts = snapshot.data!;
-
-      // ✅ FIX هنا
-      final posts = allPosts.where((post) {
-        return post['profile_id'] == widget.userId &&
-               post['type'] == type;
-      }).toList();
+      final posts = snapshot.data!
+          .where((post) => post['type'] == type)
+          .toList();
 
       if (posts.isEmpty) {
         return const Center(child: Text('No content'));
       }
 
       return GridView.builder(
+        physics: const CarouselScrollPhysics(),
         padding: const EdgeInsets.all(4),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
@@ -1026,7 +1124,8 @@ Widget build(BuildContext context) {
                 : imageUrl.isNotEmpty
                     ? Image.network(imageUrl, fit: BoxFit.cover)
                     : const Center(
-                        child: Icon(Icons.image_not_supported_outlined)),
+                        child: Icon(Icons.image_not_supported_outlined),
+                      ),
           );
         },
       );
@@ -1076,5 +1175,31 @@ class _Stat extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _TabBarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+
+  _TabBarDelegate(this.child);
+
+  @override
+  double get minExtent => 48;
+
+  @override
+  double get maxExtent => 48;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _TabBarDelegate oldDelegate) {
+    return false;
   }
 }

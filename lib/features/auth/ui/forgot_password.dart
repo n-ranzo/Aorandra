@@ -1,18 +1,11 @@
-import 'dart:math';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/ui/ui_controller.dart';
 import '../../../shared/widgets/glass_button.dart';
 import '../../../core/utils/glass_container.dart';
+import '../data/otp_service.dart';
 import 'reset_password_screen.dart';
-
-
-
-
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -48,31 +41,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return null;
   }
 
-  // ================= SEND EMAIL =================
-
-  Future<void> sendEmailOtp(String email, String otp) async {
-    final response = await http.post(
-      Uri.parse('https://api.emailjs.com/api/v1.0/email/send'),
-      headers: {
-        'origin': 'http://localhost',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'service_id': 'service_f85ep68',
-        'template_id': 'template_k5107gp',
-        'user_id': 'fNVSzm6rErLvCuZw2',
-        'template_params': {
-          'email': email,
-          'code': otp,
-        }
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Email failed: ${response.body}');
-    }
-  }
-
   // ================= SEND OTP =================
 
   Future<void> _sendReset() async {
@@ -87,24 +55,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       setState(() => _isLoading = true);
 
-      final otp = (100000 + Random().nextInt(900000)).toString();
-
-      await supabase.from('otp_codes').insert({
-        'email': email,
-        'code': otp,
-        'expires_at': DateTime.now()
-            .add(const Duration(minutes: 5))
-            .toIso8601String(),
-      });
-
-      await sendEmailOtp(email, otp);
+      // 🔥 SEND OTP
+      await OtpService().sendOtp(email);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Verification code sent 📩")),
+        const SnackBar(content: Text("Verification code sent")),
       );
 
+      // 🔥 GO TO OTP SCREEN
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -118,7 +78,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        const SnackBar(
+          content: Text("Error sending code"),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) {
@@ -129,54 +92,45 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   // ================= UI =================
 
- Widget _buildInput() {
-  final theme = Theme.of(context);
+  Widget _buildInput() {
+    final theme = Theme.of(context);
 
-  return GlassContainer(
-    height: UIController.inputHeight,
-    radius: UIController.inputRadius,
-    border: Border.all(
-      color: _emailError != null
-          ? Colors.red
-          : theme.dividerColor.withOpacity(0.2),
-      width: 1.5,
-    ),
-    child: TextField(
-      controller: _emailController,
-
-      /// ✅ FIX TEXT COLOR
-      style: TextStyle(
-        color: theme.brightness == Brightness.dark
-            ? Colors.white
-            : Colors.black,
+    return GlassContainer(
+      height: UIController.inputHeight,
+      radius: UIController.inputRadius,
+      border: Border.all(
+        color: _emailError != null
+            ? Colors.red
+            : theme.dividerColor.withOpacity(0.2),
+        width: 1.5,
       ),
-
-      onChanged: (_) {
-        if (_emailError != null) {
-          setState(() => _emailError = null);
-        }
-      },
-
-      decoration: InputDecoration(
-        border: InputBorder.none,
-        hintText: 'Enter your email',
-
-        /// ✅ FIX HINT
-        hintStyle: TextStyle(
-          color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+      child: TextField(
+        controller: _emailController,
+        style: TextStyle(
+          color: theme.brightness == Brightness.dark
+              ? Colors.white
+              : Colors.black,
         ),
-
-        /// ✅ FIX ICON
-        prefixIcon: Icon(
-          Icons.email,
-          color: theme.iconTheme.color,
+        onChanged: (_) {
+          if (_emailError != null) {
+            setState(() => _emailError = null);
+          }
+        },
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          hintText: 'Enter your email',
+          hintStyle: TextStyle(
+            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+          ),
+          prefixIcon: Icon(
+            Icons.email,
+            color: theme.iconTheme.color,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
-
-        contentPadding: const EdgeInsets.symmetric(vertical: 14),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildErrorText() {
     return Row(
@@ -193,23 +147,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   // ================= BUILD =================
 
- @override
-Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-  final theme = Theme.of(context);
-
-  return Scaffold(
-    backgroundColor: theme.scaffoldBackgroundColor,
-
-    body: Container(
-      /// 🔥 حذفنا gradient
-      color: theme.scaffoldBackgroundColor,
-
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
         child: Stack(
           children: [
 
-            /// 🔥 BACK BUTTON
+            // 🔙 BACK BUTTON
             Positioned(
               top: 16,
               left: 24,
@@ -223,7 +171,7 @@ Widget build(BuildContext context) {
               ),
             ),
 
-            /// 🔥 CONTENT
+            // 📄 CONTENT
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -240,34 +188,31 @@ Widget build(BuildContext context) {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
+
+                    Text(
+                      'Enter your email and we will send you a verification code.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+
+                    const SizedBox(height: 25),
 
                     _buildInput(),
 
                     const SizedBox(height: 10),
                     if (_emailError != null) _buildErrorText(),
 
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 20),
 
-                    SizedBox(
-                      width: 180,
-                      child: GlassContainer(
-                        height: UIController.buttonHeight,
-                        radius: UIController.buttonRadius,
-                        child: GestureDetector(
-                          onTap: _isLoading ? null : _sendReset,
-                          child: _isLoading
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                )
-                              : const GlassButton(text: 'Next'),
-                        ),
+                    Text(
+                      'Make sure your email is correct before continuing.',
+                      style: TextStyle(
+                        color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -275,10 +220,34 @@ Widget build(BuildContext context) {
               ),
             ),
 
+            // 🔥 SEND BUTTON
+            Positioned(
+              bottom: 30,
+              right: 20,
+              child: SizedBox(
+                width: 120,
+                child: GlassContainer(
+                  height: UIController.buttonHeight,
+                  radius: UIController.buttonRadius,
+                  child: GestureDetector(
+                    onTap: _isLoading ? null : _sendReset,
+                    child: _isLoading
+                        ? const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : const GlassButton(text: 'Send'),
+                  ),
+                ),
+              ),
+            ),
+
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

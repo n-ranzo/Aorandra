@@ -116,7 +116,7 @@ Future<void> loadVideos() async {
       .map<String>((e) => e['post_id'].toString())
       .toSet();
 
-  // 🔥 احسب اللايكات لكل فيديو
+  
   for (var video in videoData) {
     final count = await supabase
         .from('likes')
@@ -140,7 +140,7 @@ Future<void> _toggleLike(Map video) async {
   final String videoId = video['id'];
   final bool isLiked = likedVideos.contains(videoId);
 
-  // 🔥 UI + COUNT (instant مثل انستا)
+  // UI + COUNT 
   setState(() {
     if (isLiked) {
       likedVideos.remove(videoId);
@@ -217,7 +217,7 @@ void initState() {
     duration: const Duration(seconds: 6),
   )..repeat();
 
-  loadVideos(); // 🔥 مهم
+  loadVideos(); 
 }
 
 
@@ -319,7 +319,7 @@ Widget build(BuildContext context) {
     child: Row(
       children: [
 
-        // 🔥 REFRESH BUTTON (LEFT)
+        // REFRESH BUTTON (LEFT)
         GestureDetector(
           onTap: refreshFeed,
           child: const Icon(
@@ -537,7 +537,7 @@ Widget _buildRightActions(Map video) {
  Widget _buildBottomInfo(Map video) {
   final supabase = Supabase.instance.client;
 
-  // 🔥 CURRENT USER
+  // CURRENT USER
   final currentUserId = supabase.auth.currentUser!.id;
   final isMe = video['user_id'] == currentUserId;
 
@@ -605,7 +605,7 @@ Widget _buildRightActions(Map video) {
 
                 const SizedBox(width: 10),
 
-                // 🔥 FOLLOW OR EMPTY SPACE
+                // FOLLOW OR EMPTY SPACE
                 isMe
                     ? const SizedBox(width: 70)
                     : _glassFollowButton(video['user_id']),

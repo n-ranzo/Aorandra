@@ -2,11 +2,9 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'preview_screen.dart';

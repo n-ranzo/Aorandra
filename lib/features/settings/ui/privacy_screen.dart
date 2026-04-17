@@ -158,7 +158,7 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
     return SwitchListTile(
       value: value,
       onChanged: onChanged,
-      activeColor: Colors.redAccent,
+      activeThumbColor: Colors.redAccent,
       title: Text(
         title,
         style: TextStyle(

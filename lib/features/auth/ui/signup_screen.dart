@@ -43,6 +43,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
 
   // ================================
   // STATE VARIABLES
@@ -119,6 +120,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final email = _emailController.text.trim().toLowerCase();
   final pass = _passwordController.text.trim();
 
+  final name = _nameController.text.trim();
+
   // ================= VALIDATION =================
   setState(() {
     _usernameError = _validateUsername(username);
@@ -137,7 +140,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     // ================= CHECK USERNAME =================
     final usernameCheck = await _supabase
-        .from('profiles') // 🔥 FIX
+        .from('profiles')
         .select('id')
         .eq('username', username)
         .maybeSingle();
@@ -145,32 +148,19 @@ class _SignupScreenState extends State<SignupScreen> {
     if (usernameCheck != null) {
       setState(() {
         _usernameError = 'Username already taken';
-        _isLoading = false;
       });
       return;
     }
 
-    // ================= SIGN UP =================
-    final res = await _supabase.auth.signUp(
-      email: email,
-      password: pass,
-    );
-
-    final userId = res.user?.id ?? res.session?.user.id;
-
-    if (userId == null) {
-      _showError('Signup failed');
-      return;
-    }
-
-    // ================= CREATE PROFILE =================
-    await _supabase.from('profiles').insert({
-      'id': userId,
-      'username': username,
-      'email': email,
-      'avatar_url': '', // 🔥 optional default
-      'created_at': DateTime.now().toIso8601String(),
-    });
+    // ================= SIGN UP (مرة واحدة فقط) =================
+    await _supabase.auth.signUp(
+  email: email,
+  password: pass,
+  data: {
+    'username': username,
+    'name': name, 
+  },
+);
 
     if (!mounted) return;
 
@@ -179,14 +169,21 @@ class _SignupScreenState extends State<SignupScreen> {
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
-
   } on AuthException catch (e) {
+    if (!mounted) return;
+
     if (e.message.toLowerCase().contains('already registered')) {
-      setState(() => _emailError = 'Email already in use');
+      setState(() {
+        _emailError = 'Email already in use';
+      });
     } else {
       _showError(e.message);
     }
-  } catch (_) {
+  } on PostgrestException catch (e) {
+    if (!mounted) return;
+    _showError(e.message);
+  } catch (e) {
+    if (!mounted) return;
     _showError('Something went wrong');
   } finally {
     if (mounted) {
@@ -392,7 +389,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           },
                         ),
 
-                        SizedBox(height: UIController.inputSpacing),
+                        const SizedBox(height: UIController.inputSpacing),
 
                         // Email Input
                         _buildInput(
@@ -409,7 +406,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           },
                         ),
 
-                        SizedBox(height: UIController.inputSpacing),
+                        const SizedBox(height: UIController.inputSpacing),
 
                         // Password Input
                         _buildInput(

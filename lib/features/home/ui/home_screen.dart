@@ -45,7 +45,7 @@ import 'package:aorandra/shared/services/user_manager.dart';
 // ================================
 // SHARED WIDGETS
 // ================================
-import 'package:aorandra/shared/widgets/user_avatar.dart'; // 🔥 IMPORTANT
+import 'package:aorandra/shared/widgets/user_avatar.dart'; // IMPORTANT
 
 // ================================
 // FEATURE SCREENS
@@ -133,10 +133,10 @@ late Future<List<dynamic>> _postsFuture;
   Set<String> selectedUsers = {};
   TextEditingController shareMessageController = TextEditingController();
 
-  // 🔥 PAGE CONTROLLERS لكل بوست
+  // PAGE CONTROLLERS 
 final Map<String, PageController> pageControllers = {};
 
-// 🔥 CURRENT PAGE لكل بوست
+// CURRENT PAGE 
 final Map<String, ValueNotifier<int>> pageIndexes = {};
 
   // ================================
@@ -156,7 +156,7 @@ final Map<String, ValueNotifier<int>> pageIndexes = {};
 
   await Clipboard.setData(ClipboardData(text: link));
 
-  HapticFeedback.mediumImpact(); // 🔥 اهتزاز خفيف
+  HapticFeedback.mediumImpact(); 
 
   Navigator.pop(context);
 
@@ -175,7 +175,7 @@ void _reportPost(Map post) async {
   try {
     await supabase.from('reports').insert({
       'post_id': post['id'],
-      'user_id': userId,
+      'profile_id': userId,
       'created_at': DateTime.now().toIso8601String(),
     });
 
@@ -218,13 +218,12 @@ Future<void> _manualRefresh() async {
   try {
     final newPosts = await _fetchPosts();
 
-    await _loadLikesCounts();
     await _loadLikedPosts();
 
-    // ⬇️ فرق الوقت
+    
     final elapsed = stopwatch.elapsedMilliseconds;
 
-    // ⬇️ إذا كان سريع زود وقت
+    
     if (elapsed < 700) {
       await Future.delayed(Duration(milliseconds: 700 - elapsed));
     }
@@ -256,11 +255,9 @@ void initState() {
 
   _loadMyAvatar();
   _loadLikedPosts();
-  _loadLikesCounts();
   _loadCommentsCounts();
   _loadSavedPosts();
 
-  _loadUsers(); 
 
   searchController.addListener(_onSearchChanged);
 
@@ -271,20 +268,6 @@ void initState() {
       headerOffset = (offset * 0.7).clamp(0, 80);
     });
   });
-}
-
-Future<void> _loadUsers() async {
-  try {
-    final data = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url');
-
-    UserManager.instance.setUsers(data);
-
-    if (mounted) setState(() {}); // 🔥 هذا هو الحل
-  } catch (e) {
-    debugPrint("LOAD USERS ERROR: $e");
-  }
 }
 
 void _shareExternally(Map post) {
@@ -319,64 +302,59 @@ Future<List<dynamic>> _fetchPosts() async {
     // ============================
     // 1. FETCH POSTS
     // ============================
-    // Get all posts ordered by newest first
     final posts = await supabase
         .from('posts')
         .select()
-        .eq('type', 'post') // Only fetch real posts
+        .eq('type', 'post')
         .order('created_at', ascending: false);
 
-    // If no posts, return empty list
     if (posts.isEmpty) return [];
 
     // ============================
-    // 2. EXTRACT UNIQUE USER IDS
+    // 2. EXTRACT PROFILE IDS
     // ============================
-    // Collect all unique user IDs from posts
-    final userIds = posts
-        .map((post) => post['user_id'])
+    final profileIds = posts
+        .map((post) => post['profile_id'])
         .where((id) => id != null)
-        .toSet() // Remove duplicates
+        .toSet()
         .toList();
 
     // ============================
-    // 3. FETCH USERS (FIXED 🔥)
+    // 3. FETCH USERS
     // ============================
-    // IMPORTANT:
-    // We use "profiles" instead of "users"
-    // to keep consistency across the app
     final users = await supabase
-        .from('profiles') // ✅ unified source
+        .from('profiles')
         .select('id, username, avatar_url')
-        .inFilter('id', userIds);
+        .inFilter('id', profileIds);
 
     // ============================
-    // 4. MAP USERS BY ID
+    // 4. CACHE USERS (🔥 FIX)
     // ============================
-    // Convert list of users into a map for fast lookup
-    // Also normalize field names (avatar_url → image)
+    // بدل ما ننادي notifyListeners أثناء build
+    // نخليه بعد الفريم
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UserManager.instance.setUsers(users);
+    });
+
     final Map<String, dynamic> usersMap = {
       for (var user in users)
         user['id'].toString(): {
           'id': user['id'],
           'username': user['username'] ?? 'User',
-          'image': user['avatar_url'] ?? '', // 🔥 unified key
+          'image': user['avatar_url'] ?? '',
         }
     };
 
     // ============================
-    // 5. MERGE POSTS + USER DATA
+    // 5. MERGE POSTS
     // ============================
-    // Attach user info directly into each post
     final enrichedPosts = posts.map((post) {
-      final userId = post['user_id']?.toString();
+      final profileId = post['profile_id']?.toString();
 
       return {
         ...post,
-
-        // Inject user object into post
-        'user': usersMap[userId] ?? {
-          'id': userId,
+        'user': usersMap[profileId] ?? {
+          'id': profileId,
           'username': 'User',
           'image': '',
         },
@@ -384,14 +362,33 @@ Future<List<dynamic>> _fetchPosts() async {
     }).toList();
 
     // ============================
-    // 6. RETURN FINAL DATA
+    // 6. LOAD LIKES
+    // ============================
+    final postIds = enrichedPosts.map((p) => p['id']).toList();
+
+    final likesData = await supabase
+        .from('likes')
+        .select('post_id')
+        .inFilter('post_id', postIds);
+
+    final Map<String, int> tempLikes = {};
+
+    for (var like in likesData) {
+      final id = like['post_id'].toString();
+      tempLikes[id] = (tempLikes[id] ?? 0) + 1;
+    }
+
+    if (mounted) {
+      setState(() {
+        likesCount = tempLikes;
+      });
+    }
+
+    // ============================
+    // 7. RETURN POSTS
     // ============================
     return enrichedPosts;
-
   } catch (e) {
-    // ============================
-    // ERROR HANDLING
-    // ============================
     print("FETCH POSTS ERROR: $e");
     return [];
   }
@@ -414,7 +411,7 @@ Future<List<dynamic>> _fetchPosts() async {
   final data = await supabase
       .from('saved_posts')
       .select('post_id')
-      .eq('user_id', userId);
+      .eq('profile_id', userId);
 
   setState(() {
     savePosts = {
@@ -430,7 +427,7 @@ Future<void> _toggleSave(String postId) async {
 
   final isSaved = savePosts[postId] ?? false;
 
-  // 🔥 UI فوري
+
   setState(() {
     savePosts[postId] = !isSaved;
   });
@@ -439,7 +436,7 @@ Future<void> _toggleSave(String postId) async {
     final existing = await supabase
         .from('saved_posts')
         .select()
-        .eq('user_id', userId)
+        .eq('profile_id', userId)
         .eq('post_id', postId)
         .maybeSingle();
 
@@ -447,13 +444,13 @@ Future<void> _toggleSave(String postId) async {
       await supabase
           .from('saved_posts')
           .delete()
-          .eq('user_id', userId)
+          .eq('profile_id', userId)
           .eq('post_id', postId);
     } else {
       await supabase
           .from('saved_posts')
           .insert({
-            'user_id': userId,
+            'profile_id': userId,
             'post_id': postId,
           });
     }
@@ -679,13 +676,13 @@ void _editPostCaption(String postId, String oldCaption) {
 
  /// Toggle like state - updates UI immediately then syncs to server
 Future<void> _toggleLike(String postId, int currentServerLikes) async {
-  final userId = supabase.auth.currentUser?.id;
-  if (userId == null) return;
+  final profileId = supabase.auth.currentUser?.id;
+  if (profileId == null) return;
 
   final wasLiked = likedPosts[postId] ?? false;
   final prevCount = likesCount[postId] ?? currentServerLikes;
 
-  // UI update (optimistic)
+  // ================= OPTIMISTIC UI =================
   setState(() {
     likedPosts[postId] = !wasLiked;
     likesCount[postId] = wasLiked ? prevCount - 1 : prevCount + 1;
@@ -694,8 +691,8 @@ Future<void> _toggleLike(String postId, int currentServerLikes) async {
   try {
     final existing = await supabase
         .from('likes')
-        .select()
-        .eq('user_id', userId)
+        .select('id')
+        .eq('profile_id', profileId)
         .eq('post_id', postId)
         .maybeSingle();
 
@@ -704,69 +701,56 @@ Future<void> _toggleLike(String postId, int currentServerLikes) async {
       await supabase
           .from('likes')
           .delete()
-          .eq('user_id', userId)
+          .eq('profile_id', profileId)
           .eq('post_id', postId);
 
     } else {
       // ADD LIKE
       await supabase.from('likes').insert({
-        'user_id': userId,
+        'profile_id': profileId,
         'post_id': postId,
       });
 
       // ================= NOTIFICATION =================
-
       final postData = await supabase
           .from('posts')
-          .select('user_id')
+          .select('profile_id') // ✅ FIXED
           .eq('id', postId)
           .single();
 
-      final postOwnerId = postData['user_id'];
+      final postOwnerId = postData['profile_id'];
 
-      if (postOwnerId != userId) {
+      if (postOwnerId != profileId) {
         await supabase.from('notifications').insert({
           'receiver_id': postOwnerId,
-          'sender_id': userId,
+          'sender_id': profileId,
           'type': 'like',
           'post_id': postId,
-          'is_read': false, // 🔥 IMPORTANT
+          'is_read': false,
           'created_at': DateTime.now().toIso8601String(),
         });
       }
     }
-
-    final likes = await supabase
-        .from('likes')
-        .select()
-        .eq('post_id', postId);
-
-    await supabase
-        .from('posts')
-        .update({'likes': likes.length})
-        .eq('id', postId);
-
-    if (mounted) {
-      setState(() {
-        likesCount[postId] = likes.length;
-      });
-    }
-
   } catch (e) {
+    // ================= ROLLBACK =================
+    if (!mounted) return;
+
     setState(() {
       likedPosts[postId] = wasLiked;
       likesCount[postId] = prevCount;
     });
+
+    debugPrint("LIKE ERROR: $e");
   }
 }
   Future<void> _loadLikedPosts() async {
-  final userId = supabase.auth.currentUser?.id;
-  if (userId == null) return;
+  final profileId = supabase.auth.currentUser?.id;
+  if (profileId == null) return;
 
-  final data =  await supabase
+  final data = await supabase
       .from('likes')
       .select('post_id')
-      .eq('user_id', userId);
+      .eq('profile_id', profileId);
 
   if (!mounted) return;
 
@@ -775,25 +759,6 @@ Future<void> _toggleLike(String postId, int currentServerLikes) async {
       for (var item in data)
         item['post_id'].toString(): true,
     };
-  });
-}
-
-Future<void> _loadLikesCounts() async {
-  final likesData = await supabase
-      .from('likes')
-      .select('post_id');
-
-  Map<String, int> tempCounts = {};
-
-  for (var like in likesData) {
-    final postId = like['post_id'].toString();
-    tempCounts[postId] = (tempCounts[postId] ?? 0) + 1;
-  }
-
-  if (!mounted) return;
-
-  setState(() {
-    likesCount = tempCounts;
   });
 }
 
@@ -880,7 +845,7 @@ Widget build(BuildContext context) {
           // MAIN FEED (HOME TAB)
           // =========================================================
           if (currentTab == 0)
-            buildFeed(), // 🔥 Replaced _buildRealFeed()
+            buildFeed(), // Replaced _buildRealFeed()
 
           // =========================================================
           // STORY SWIPE ZONE (LEFT EDGE)
@@ -951,7 +916,7 @@ Widget build(BuildContext context) {
           // =========================================================
           if (currentTab == 1)
             AorasScreen(
-              videos: ['assets/videos/test.mp4'],
+              videos: const ['assets/videos/test.mp4'],
               onShare: (video) => _openShareSheet(video),
             ),
 
@@ -1058,7 +1023,7 @@ Widget _buildShareSheet(Map post, ScrollController scrollController) {
   return StatefulBuilder(
     builder: (context, setModalState) {
 
-      // ✅ USERS FROM CACHE
+      // USERS FROM CACHE
       final users = UserManager.instance.getAllUsers();
 
       return Container(
@@ -1138,7 +1103,7 @@ Widget _buildShareSheet(Map post, ScrollController scrollController) {
                                 child: Column(
                                   children: [
 
-                                    // 🔥 AVATAR (FROM MANAGER)
+                                    // AVATAR (FROM MANAGER)
                                     Stack(
                                       children: [
                                         SizedBox(
@@ -1171,7 +1136,7 @@ Widget _buildShareSheet(Map post, ScrollController scrollController) {
 
                                     const SizedBox(height: 5),
 
-                                    // 🔥 USERNAME (FROM MANAGER)
+                                    // USERNAME (FROM MANAGER)
                                     Text(
                                       UserManager.instance.getUsername(id),
                                       style: const TextStyle(
@@ -1263,7 +1228,7 @@ Widget _externalApp(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
 
-            // 🔥 Glass effect
+            // Glass effect
             color: Colors.white.withValues(alpha: 0.08),
 
             border: Border.all(
@@ -1315,7 +1280,7 @@ Future<void> _sendToMultipleUsers(Map post) async {
   try {
 
     // ================= SHARE LOGIC =================
-    // 🔥 Send the post as a message to each selected user
+    // Send the post as a message to each selected user
     for (final receiverId in selectedUsers) {
 
       await supabase.from('messages').insert({
@@ -1326,7 +1291,7 @@ Future<void> _sendToMultipleUsers(Map post) async {
         'created_at': DateTime.now().toIso8601String(),
       });
 
-      // 🔥 DEBUG: check if data is being sent correctly
+      // DEBUG: check if data is being sent correctly
       debugPrint("SENT TO: $receiverId | POST: ${post['id']}");
     }
 
@@ -1352,7 +1317,6 @@ Future<void> _sendToMultipleUsers(Map post) async {
 
 void _showCenterSentToast() {
   final overlay = Overlay.of(context);
-  if (overlay == null) return;
 
   final overlayEntry = OverlayEntry(
     builder: (context) => Center(
@@ -1457,7 +1421,7 @@ Widget buildFeed() {
     onShare: _openShareSheet,
     onOpenProfile: _goToProfile,
 
-    // 🔥 Open post options menu (3 dots)
+    // Open post options menu (3 dots)
     onOpenMenu: _openPostMenu,
 
     // ================= UTILITIES =================
@@ -1522,54 +1486,6 @@ Widget buildFeed() {
             ),
           );
         },
-      ),
-    );
-  }
-
-  // ================================
-  // EMPTY STATE
-  // ================================
-
-  /// Shown when there are no posts in the feed
-  Widget _buildEmptyState() {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Transform.translate(
-        offset: const Offset(0, 30),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: HomeController.emptyIconCircleSize,
-              height: HomeController.emptyIconCircleSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: theme.dividerColor, width: 1.5),
-              ),
-              child: Icon(Icons.favorite_border,
-                  color: theme.iconTheme.color,
-                  size: HomeController.emptyIconSize),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'No content yet',
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color,
-                fontSize: HomeController.emptyTitleSize,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Your home feed will appear here',
-              style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color,
-                fontSize: HomeController.emptySubtitleSize,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1765,7 +1681,7 @@ Widget _buildStoryPanel() {
                                               myAvatar,
                                           storyDocId: '',
                                           isMyStory: true,
-                                          viewers: [],
+                                          viewers: const [],
                                         ),
                                       ),
                                     );
@@ -2452,14 +2368,14 @@ Widget _buildBottomBar() {
 
                           setState(() => isHandleLoading = true);
 
-                          // 🔥 fake drag animation (smooth like pull)
+                          // fake drag animation (smooth like pull)
                           await _scrollController.animateTo(
                             -80,
                             duration: const Duration(milliseconds: 300),
                             curve: Curves.easeOut,
                           );
 
-                          // 🔥 trigger real refresh
+                          // trigger real refresh
                           if (_refreshKey.currentState != null) {
                             await _refreshKey.currentState!.show();
                           }
@@ -2714,58 +2630,85 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   bool isSending = false;
 
   // ================================
-  // SEND COMMENT
-  // ================================
- Future<void> _sendComment() async {
+// SEND COMMENT
+// ================================
+/// =============================================
+/// SEND COMMENT FUNCTION
+/// Handles:
+/// - Prevent duplicate sending
+/// - Insert comment into Supabase
+/// - Send notification to post owner
+/// - Clear input after success
+/// =============================================
+Future<void> _sendComment() async {
+  // ================= PREVENT SPAM =================
   if (isSending) return;
 
+  // ================= GET TEXT =================
   final text = commentController.text.trim();
   if (text.isEmpty) return;
 
+  // ================= GET CURRENT USER =================
   final user = supabase.auth.currentUser;
   if (user == null) return;
 
+  // ================= START LOADING =================
   setState(() => isSending = true);
 
   try {
-    // ================= INSERT COMMENT =================
+    // =========================================================
+    // INSERT COMMENT INTO DATABASE
+    // Using profile_id as the single source of truth
+    // =========================================================
     await supabase.from('comments').insert({
       'post_id': widget.postId,
-      'user_id': user.id,
+      'profile_id': user.id,
       'text': text,
-      'username': user.userMetadata?['username'] ?? 'User',
-      'avatar_url': user.userMetadata?['avatar_url'] ?? '',
       'created_at': DateTime.now().toIso8601String(),
     });
 
-    // ================= GET POST OWNER =================
+    // =========================================================
+    // GET POST OWNER (for notification)
+    // FIX: use profile_id instead of user_id
+    // =========================================================
     final postData = await supabase
         .from('posts')
-        .select('user_id')
+        .select('profile_id')
         .eq('id', widget.postId)
         .single();
 
-    final postOwnerId = postData['user_id'];
+    final postOwnerId = postData['profile_id'];
 
-    // ================= SEND NOTIFICATION =================
+    // =========================================================
+    // SEND NOTIFICATION (only if not commenting on own post)
+    // =========================================================
     if (postOwnerId != user.id) {
       await supabase.from('notifications').insert({
         'receiver_id': postOwnerId,
         'sender_id': user.id,
         'type': 'comment',
         'post_id': widget.postId,
-        'is_read': false, // 🔥 IMPORTANT
+        'is_read': false,
         'created_at': DateTime.now().toIso8601String(),
       });
     }
 
-    // ================= CLEAN =================
+    // =========================================================
+    // CLEAR INPUT FIELD
+    // =========================================================
     commentController.clear();
 
+    // Optional: remove keyboard
+    FocusScope.of(context).unfocus();
+
   } catch (e) {
+    // =========================================================
+    // ERROR HANDLING
+    // =========================================================
     debugPrint('Comment error: $e');
   }
 
+  // ================= STOP LOADING =================
   setState(() => isSending = false);
 }
 

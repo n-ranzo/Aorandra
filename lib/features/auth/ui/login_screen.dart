@@ -107,10 +107,10 @@ class _LoginScreenState extends State<LoginScreen> {
     // إذا المستخدم كتب username بدل email
     if (!input.contains('@')) {
       final result = await _supabase
-          .from('profiles') // 🔥 FIX
+          .from('profiles') 
           .select('email')
           .eq('username', input)
-          .maybeSingle(); // 🔥 مهم
+          .maybeSingle(); 
 
       if (result == null) {
         setState(() {
@@ -286,7 +286,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Column(
                   children: [
-                    SizedBox(height: UIController.topSpacing),
+                    const SizedBox(height: UIController.topSpacing),
 
                     // App Title
                     GlassContainer(
@@ -325,7 +325,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     if (_emailError != null) _errorText(_emailError!),
 
-                    SizedBox(height: UIController.inputSpacing),
+                    const SizedBox(height: UIController.inputSpacing),
 
                     // Password Input
                     _buildInput(
@@ -427,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                    SizedBox(height: UIController.bottomSpacing),
+                    const SizedBox(height: UIController.bottomSpacing),
                   ],
                 ),
               ),

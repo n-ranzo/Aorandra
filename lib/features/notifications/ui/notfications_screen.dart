@@ -199,7 +199,7 @@ Widget build(BuildContext context) {
                       .eq('id', notif['id']);
 
                   await supabase.from('notifications').insert({
-                    'receiver_id': notif['sender_id'], // 🔥 fix
+                    'receiver_id': notif['sender_id'], 
                     'sender_id': currentUser,
                     'type': 'follow_accept',
                     'created_at':

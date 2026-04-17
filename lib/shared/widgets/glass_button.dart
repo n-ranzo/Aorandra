@@ -54,7 +54,7 @@ class GlassButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDisabled = !isEnabled || isLoading;
-    final theme = Theme.of(context); // 🔥 إضافة
+    final theme = Theme.of(context); 
 
     return SizedBox(
       width: width,
@@ -80,8 +80,8 @@ class GlassButton extends StatelessWidget {
               highlightColor: Colors.transparent,
               child: Center(
                 child: isLoading
-                    ? _buildLoadingIndicator(theme) // 🔥 تعديل
-                    : _buildButtonText(isDisabled, theme), // 🔥 تعديل
+                    ? _buildLoadingIndicator(theme)
+                    : _buildButtonText(isDisabled, theme), 
               ),
             ),
           ),
@@ -101,7 +101,7 @@ class GlassButton extends StatelessWidget {
       child: CircularProgressIndicator(
         strokeWidth: 2,
         valueColor: AlwaysStoppedAnimation<Color>(
-          textColor ?? theme.textTheme.bodyLarge!.color!, // 🔥 FIX
+          textColor ?? theme.textTheme.bodyLarge!.color!, 
         ),
       ),
     );
@@ -113,7 +113,7 @@ class GlassButton extends StatelessWidget {
       style: TextStyle(
         color: isDisabled
             ? theme.textTheme.bodyLarge!.color!.withOpacity(0.5)
-            : (textColor ?? theme.textTheme.bodyLarge!.color), // 🔥 FIX
+            : (textColor ?? theme.textTheme.bodyLarge!.color), 
         fontSize: fontSize ?? UIController.buttonTextSize,
         fontWeight: FontWeight.bold,
         letterSpacing: 1,

@@ -3,47 +3,55 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// =============================================
 /// HOME CONTROLLER
-/// Manages UI configurations and Data logic
+/// Handles data fetching + user interactions
 /// =============================================
 class HomeController {
-  
+
   // ======================================================
-  // ===================== DATA LOGIC =====================
+  // ===================== CORE ============================
   // ======================================================
 
-  static final _supabase = Supabase.instance.client;
+  static final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Fetch posts with linked profile data (username & avatar)
- static Future<List<dynamic>> fetchPosts() async {
-  try {
-    final response = await _supabase
-        .from('posts')
-        .select('''
-          id,
-          user_id,
-          media_urls,
-          caption,
-          type,
-          likes,
-          comments,
-          shares,
-          created_at,
-          profiles (
-            username,
-            avatar_url
-          )
-        ''')
-        .order('created_at', ascending: false)
-        .range(0, 10);
+  // ======================================================
+  // ===================== POSTS ===========================
+  // ======================================================
 
-    return response as List<dynamic>;
-  } catch (e) {
-    debugPrint('Error fetching posts: $e');
-    return [];
+  /// Fetch posts with profile data
+  static Future<List<dynamic>> fetchPosts() async {
+    try {
+      final response = await _supabase
+          .from('posts')
+          .select('''
+            id,
+            profile_id,
+            media_urls,
+            caption,
+            type,
+            likes,
+            comments,
+            shares,
+            created_at,
+            profiles (
+              username,
+              avatar_url
+            )
+          ''')
+          .order('created_at', ascending: false)
+          .range(0, 20);
+
+      return response as List<dynamic>;
+    } catch (e) {
+      debugPrint('Error fetching posts: $e');
+      return [];
+    }
   }
-}
 
-  /// Fetch comments with linked profile data
+  // ======================================================
+  // ===================== COMMENTS ========================
+  // ======================================================
+
+  /// Fetch comments with profile data
   static Future<List<dynamic>> fetchComments(String postId) async {
     try {
       final response = await _supabase
@@ -57,6 +65,7 @@ class HomeController {
           ''')
           .eq('post_id', postId)
           .order('created_at', ascending: true);
+
       return response as List<dynamic>;
     } catch (e) {
       debugPrint('Error fetching comments: $e');
@@ -64,8 +73,106 @@ class HomeController {
     }
   }
 
+  /// Add new comment
+  static Future<void> addComment(String postId, String text) async {
+    try {
+      final userId = _supabase.auth.currentUser!.id;
+
+      await _supabase.from('comments').insert({
+        'post_id': postId,
+        'profile_id': userId,
+        'text': text,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // increment comments count
+      await _supabase.rpc('increment_comments', params: {
+        'post_id_input': postId,
+      });
+
+    } catch (e) {
+      debugPrint('Error adding comment: $e');
+    }
+  }
+
   // ======================================================
-  // ====================== UI CONFIG =====================
+  // ======================= LIKES =========================
+  // ======================================================
+
+  /// Toggle like (add/remove)
+  static Future<void> toggleLike(String postId) async {
+    try {
+      final userId = _supabase.auth.currentUser!.id;
+
+      final existing = await _supabase
+          .from('likes')
+          .select()
+          .eq('post_id', postId)
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+      if (existing == null) {
+        // Add like
+        await _supabase.from('likes').insert({
+          'post_id': postId,
+          'profile_id': userId,
+        });
+
+        await _supabase.rpc('increment_likes', params: {
+          'post_id_input': postId,
+        });
+
+      } else {
+        // Remove like
+        await _supabase
+            .from('likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('profile_id', userId);
+
+        await _supabase.rpc('decrement_likes', params: {
+          'post_id_input': postId,
+        });
+      }
+
+    } catch (e) {
+      debugPrint('Error toggling like: $e');
+    }
+  }
+
+  // ======================================================
+  // ======================= SHARE =========================
+  // ======================================================
+
+  /// Share post to multiple users
+  static Future<void> sharePost(
+      String postId,
+      List<String> receiverIds,
+      ) async {
+    try {
+      final senderId = _supabase.auth.currentUser!.id;
+
+      for (final receiver in receiverIds) {
+        await _supabase.from('messages').insert({
+          'sender_id': senderId,
+          'receiver_id': receiver,
+          'post_id': postId,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+
+      // increment share count
+      await _supabase.rpc('increment_shares', params: {
+        'post_id_input': postId,
+      });
+
+    } catch (e) {
+      debugPrint('Error sharing post: $e');
+    }
+  }
+
+  // ======================================================
+  // ====================== UI CONFIG ======================
   // ======================================================
 
   static double headerTop = 12;

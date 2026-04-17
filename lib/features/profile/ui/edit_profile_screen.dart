@@ -72,34 +72,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // ================================
 
   /// Load current user data from Supabase
- Future<void> _loadUserData() async {
+ 
+Future<void> _loadUserData() async {
   try {
+    // Get current user ID
     final userId = _supabase.auth.currentUser!.id;
 
-    // ================= GET FROM CACHE FIRST =================
+    // ================= TRY CACHE FIRST =================
     final cachedUser = UserManager.instance.getUser(userId);
 
     if (cachedUser != null) {
       _applyUserData(cachedUser);
-      return;
+      
     }
 
-    // ================= FALLBACK: FETCH FROM DB =================
+    // ================= FETCH FROM DATABASE =================
     final data = await _supabase
-        .from('profiles') // 🔥 مو users
+        .from('profiles')
         .select('id, username, avatar_url, bio, links, name')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
+
+    // If no data found, stop safely
+    if (data == null) {
+      debugPrint('User profile not found');
+      return;
+    }
 
     // ================= SAVE TO CACHE =================
     UserManager.instance.setUser(userId, data);
 
+    // ================= APPLY DATA TO UI =================
     _applyUserData(data);
 
   } catch (e) {
     debugPrint('LOAD ERROR: $e');
   }
 }
+
+
 
 // ================= APPLY DATA =================
 void _applyUserData(Map data) {
@@ -160,61 +171,55 @@ void _applyUserData(Map data) {
   // ================================
 
   /// Save all profile changes to Supabase
-  Future<void> _saveProfile() async {
+Future<void> _saveProfile() async {
+  // Get current user ID
   final userId = _supabase.auth.currentUser!.id;
 
+  // Prevent running if widget is disposed
   if (!mounted) return;
+
+  // Show loading indicator
   setState(() => _isLoading = true);
 
   try {
-    // ================= GET CURRENT DATA (FROM CACHE OR DB) =================
+    // ================= FETCH CURRENT USER DATA =================
     Map<String, dynamic>? data =
         UserManager.instance.getUser(userId);
 
+    // If not cached → fetch from database
     if (data == null) {
       data = await _supabase
-          .from('profiles') // 🔥 FIX TABLE
+          .from('profiles')
           .select()
           .eq('id', userId)
           .single();
 
-      // save to cache
+      // Save to cache
       UserManager.instance.setUser(userId, data);
     }
 
+    // ================= PREPARE UPDATE OBJECT =================
     final updates = <String, dynamic>{
       'bio': _bioController.text.trim(),
       'links': _linksController.text.trim(),
-      'avatar_url': _imageUrl, // 🔥 FIX FIELD
+      'avatar_url': _imageUrl,
     };
 
     final now = DateTime.now();
 
-    // ================= NAME UPDATE =================
-    if (_nameController.text.trim() != data['name']) {
-      final lastChange = data['name_changed_at'];
-
-      if (lastChange != null) {
-        final lastDate = DateTime.parse(lastChange);
-        final daysDiff = now.difference(lastDate).inDays;
-
-        if (daysDiff < 5) {
-          final remaining = 5 - daysDiff;
-          _showSnackBar(
-              'You can change your name after $remaining days');
-          setState(() => _isLoading = false);
-          return;
-        }
-      }
-
-      updates['name'] = _nameController.text.trim();
-      updates['name_changed_at'] = now.toIso8601String();
+    // ================= HANDLE NAME UPDATE (NO LIMIT) =================
+    if (_nameController.text.trim() != (data['name'] ?? '')) {
+      // Allow empty name (null)
+      updates['name'] = _nameController.text.trim().isEmpty
+          ? null
+          : _nameController.text.trim();
     }
 
-    // ================= USERNAME UPDATE =================
+    // ================= HANDLE USERNAME UPDATE =================
     if (_usernameController.text.trim() != data['username']) {
       final lastChange = data['username_changed_at'];
 
+      // Enforce 10-day cooldown (KEEP THIS)
       if (lastChange != null) {
         final lastDate = DateTime.parse(lastChange);
         final daysDiff = now.difference(lastDate).inDays;
@@ -228,11 +233,13 @@ void _applyUserData(Map data) {
         }
       }
 
-      // ================= CHECK UNIQUE =================
+      final newUsername = _usernameController.text.trim();
+
+      // Check if username is already taken
       final taken = await _supabase
-          .from('profiles') // 🔥 FIX TABLE
+          .from('profiles')
           .select('id')
-          .eq('username', _usernameController.text.trim())
+          .eq('username', newUsername)
           .maybeSingle();
 
       if (taken != null && taken['id'] != userId) {
@@ -241,31 +248,53 @@ void _applyUserData(Map data) {
         return;
       }
 
-      updates['username'] = _usernameController.text.trim();
+      updates['username'] = newUsername;
       updates['username_changed_at'] =
           now.toIso8601String();
     }
 
-    // ================= APPLY UPDATE =================
-    await _supabase
-        .from('profiles') // 🔥 FIX TABLE
+    // ================= APPLY UPDATE TO DATABASE =================
+    final res = await _supabase
+        .from('profiles')
         .update(updates)
-        .eq('id', userId);
+        .eq('id', userId)
+        .select();
 
-    // ================= UPDATE CACHE 🔥 =================
+    // Debug: print result
+    print("UPDATE RESULT: $res");
+
+    // If no rows returned → update failed (likely RLS issue)
+    if (res.isEmpty) {
+      throw Exception("Update failed (RLS or no matching row)");
+    }
+
+    // ================= UPDATE LOCAL CACHE =================
     UserManager.instance.updateUser(userId, updates);
 
+    // Small delay to ensure UI sync
+    await Future.delayed(const Duration(milliseconds: 100));
+
     if (!mounted) return;
+
+    // Close screen and return success
     Navigator.pop(context, true);
 
   } catch (e) {
+    // Log error for debugging
     debugPrint('SAVE ERROR: $e');
+
+    // Show error to user
+    _showSnackBar('ERROR: $e');
   }
 
+  // Stop loading indicator
   if (mounted) {
     setState(() => _isLoading = false);
   }
 }
+
+
+
 
   /// Display a snackbar message
   void _showSnackBar(String message) {
@@ -514,33 +543,6 @@ class _EditFieldScreen extends StatelessWidget {
     required this.title,
     required this.controller,
   });
-
-  // ================================
-  // NAME CHANGE VALIDATION
-  // ================================
-
-  /// Check if name can be changed (5-day cooldown)
-  bool _canChangeName(String? lastChangeDate) {
-    if (lastChangeDate == null) return true;
-
-    final last = DateTime.parse(lastChangeDate);
-    final now = DateTime.now();
-
-    return now.difference(last).inDays >= 5;
-  }
-
-  /// Calculate remaining days until name can be changed
-  int _remainingNameDays(String? lastChangeDate) {
-    if (lastChangeDate == null) return 0;
-
-    final last = DateTime.parse(lastChangeDate);
-    final now = DateTime.now();
-
-    final passed = now.difference(last).inDays;
-
-    return (5 - passed).clamp(0, 5);
-  }
-
   // ================================
   // USERNAME CHANGE VALIDATION
   // ================================
@@ -578,7 +580,7 @@ class _EditFieldScreen extends StatelessWidget {
   final currentUserId = supabase.auth.currentUser?.id;
 
   final res = await supabase
-      .from('profiles') // 🔥 FIX TABLE
+      .from('profiles') 
       .select('id')
       .eq('username', username)
       .maybeSingle();
@@ -586,7 +588,7 @@ class _EditFieldScreen extends StatelessWidget {
   // ================= CHECK =================
   if (res == null) return false;
 
-  // 🔥 IMPORTANT: ignore current user
+  // IMPORTANT: ignore current user
   return res['id'] != currentUserId;
 }
 
@@ -639,7 +641,7 @@ Widget build(BuildContext context) {
 
               final userId = supabase.auth.currentUser!.id;
 
-              // ================= CACHE 🔥 =================
+              // ================= CACHE =================
               final data = UserManager.instance.getUser(userId);
 
               if (data == null) {
@@ -662,27 +664,6 @@ Widget build(BuildContext context) {
                 );
                 return;
               }
-
-              // ================= NAME VALIDATION =================
-              if (title == 'Name') {
-                final canChange =
-                    _canChangeName(data['name_changed_at']);
-
-                if (!canChange) {
-                  final days =
-                      _remainingNameDays(data['name_changed_at']);
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'You can change your name after $days days',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-              }
-
               // ================= USERNAME VALIDATION =================
               if (title == 'Username') {
                 final canChange =

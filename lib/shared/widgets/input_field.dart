@@ -27,7 +27,7 @@ class InputField extends StatelessWidget {
       // يجعل النص في منتصف الحقل
       textAlignVertical: TextAlignVertical.center,
 
-      style: TextStyle(
+      style: const TextStyle(
         color: Colors.white,
         fontSize: UIController.textSize,
       ),
@@ -50,12 +50,12 @@ class InputField extends StatelessWidget {
 
         hintText: hint,
 
-        hintStyle: TextStyle(
+        hintStyle: const TextStyle(
           color: Colors.white54,
           fontSize: UIController.hintSize,
         ),
 
-        contentPadding: EdgeInsets.symmetric(
+        contentPadding: const EdgeInsets.symmetric(
           horizontal: UIController.inputHorizontalPadding,
         ),
       ),

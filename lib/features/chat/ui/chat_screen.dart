@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'dart:io';
-import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'package:aorandra/shared/services/user_manager.dart';
 
@@ -82,7 +81,7 @@ class _ChatScreenState extends State<ChatScreen> {
       .maybeSingle();
 
   if (data != null && mounted) {
-    // 🔥 خزنه بالكاش
+  
     UserManager.instance.setUser(widget.otherUserId, data);
 
     setState(() {
@@ -293,7 +292,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // 🔥 CALL BUTTONS
+          // CALL BUTTONS
           IconButton(
             onPressed: () {},
             icon: Icon(Icons.call, color: theme.iconTheme.color),
@@ -411,7 +410,7 @@ Widget _rightMessage(Map data, ThemeData theme) {
             margin: const EdgeInsets.symmetric(vertical: 4),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent, // 🔥 أو غيرها لأزرق
+              color: Colors.redAccent, 
               borderRadius: BorderRadius.circular(15),
             ),
             child: Text(
@@ -437,7 +436,7 @@ Widget _rightMessage(Map data, ThemeData theme) {
       child: Row(
         children: [
 
-          // 🔥 زر +
+          
           GestureDetector(
             onTap: _openMediaMenu,
             child: Container(
@@ -461,7 +460,7 @@ Widget _rightMessage(Map data, ThemeData theme) {
 
           const SizedBox(width: 10),
 
-          // 🔥 INPUT
+          // INPUT
           Expanded(
             child: Container(
               height: inputHeight,

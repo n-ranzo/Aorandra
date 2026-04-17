@@ -119,8 +119,8 @@ Future<void> _uploadFinalPost() async {
     // Fetch user data from database
     // ============================
     final userData = await supabase
-        .from('profiles') // 🔥 FIX
-        .select('username, avatar_url') // 🔥 FIX
+        .from('profiles') 
+        .select('username, avatar_url') 
         .eq('id', userId)
         .single();
 
@@ -128,7 +128,7 @@ Future<void> _uploadFinalPost() async {
     // Extract username & avatar
     // ============================
     final username = userData['username'] ?? "User";
-    final userImage = userData['avatar_url'] ?? ""; // 🔥 FIX
+    final userImage = userData['avatar_url'] ?? ""; 
 
     // ============================
     // Upload all selected media
@@ -152,7 +152,7 @@ Future<void> _uploadFinalPost() async {
     if (isStoryMode) {
       for (final url in uploadedUrls) {
         await supabase.from("stories").insert({
-          "user_id": userId,
+          "profile_id": userId,
           "media_url": url,
           "created_at": DateTime.now().toUtc().toIso8601String(),
           "username": username,
@@ -163,12 +163,12 @@ Future<void> _uploadFinalPost() async {
     }
 
     // ============================
-    // 🔥 AORAS MODE
+    // AORAS MODE
     // ============================
     else if (isAorasMode) {
       for (final url in uploadedUrls) {
         await supabase.from("aoras").insert({
-          "user_id": userId,
+          "profile _id": userId,
           "video_url": url,
           "created_at": DateTime.now().toUtc().toIso8601String(),
         });
@@ -180,7 +180,7 @@ Future<void> _uploadFinalPost() async {
     // ============================
     else {
       await supabase.from("posts").insert({
-        "user_id": userId,
+        "profile_id": userId,
         "media_url": uploadedUrls.first, // First media (cover)
         "media_urls": uploadedUrls,      // All media
         "caption": captionController.text.trim(),
@@ -536,7 +536,7 @@ Future<void> _uploadFinalPost() async {
     );
   }
 
-  // ================= AORAS 🔥 =================
+  // ================= AORAS =================
   else if (isAorasMode) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -553,9 +553,9 @@ Future<void> _uploadFinalPost() async {
             setState(() => selectedFilter = "Aoras Filter");
           }),
           const SizedBox(width: 14),
-          _toolButton(Icons.speed, "Speed", () {}), // 🔥 مهم للريلز
+          _toolButton(Icons.speed, "Speed", () {}), 
           const SizedBox(width: 14),
-          _toolButton(Icons.cut, "Trim", () {}), // 🔥 قص الفيديو
+          _toolButton(Icons.cut, "Trim", () {}), 
         ],
       ),
     );

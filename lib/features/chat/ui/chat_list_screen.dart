@@ -41,7 +41,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   Future<void> loadCurrentUser() async {
   final data = await supabase
-      .from('profiles') // 🔥 FIX
+      .from('profiles') 
       .select('username')
       .eq('id', widget.currentUserId)
       .maybeSingle();

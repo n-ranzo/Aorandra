@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:aorandra/shared/services/user_manager.dart';
 
 /// =============================================
-/// USER AVATAR (LIVE STREAM VERSION - FIXED)
-/// Real-time avatar + Supabase public URL support
+/// USER AVATAR (FINAL VERSION - USER MANAGER)
+/// Fast + Cached + Realtime via UserManager
 /// =============================================
 class UserAvatar extends StatelessWidget {
   final String userId;
@@ -21,45 +21,29 @@ class UserAvatar extends StatelessWidget {
     final theme = Theme.of(context);
     final double size = radius * 2;
 
-    final supabase = Supabase.instance.client;
+    // حماية
+    if (userId.isEmpty) {
+      return _buildDefaultAvatar(theme, size);
+    }
 
-    // Safety check
-    if (userId.isEmpty) return _buildDefaultAvatar(theme, size);
+    return AnimatedBuilder(
+      animation: UserManager.instance,
+      builder: (context, _) {
+        final avatar = UserManager.instance.getAvatar(userId);
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase
-          .from('profiles')
-          .stream(primaryKey: ['id'])
-          .eq('id', userId),
-      builder: (context, snapshot) {
-        
-        // ================= NO DATA =================
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        // ================= NO AVATAR =================
+        if (avatar.isEmpty) {
           return _buildDefaultAvatar(theme, size);
         }
-
-        final profile = snapshot.data!.first;
-        final String? avatarPath = profile['avatar_url'];
-
-        // ================= EMPTY AVATAR =================
-        if (avatarPath == null || avatarPath.trim().isEmpty) {
-          return _buildDefaultAvatar(theme, size);
-        }
-
-        // ================= 🔥 FIX: CONVERT TO PUBLIC URL =================
-        final imageUrl = supabase.storage
-            .from('avatars') // ⚠️ تأكد اسم bucket
-            .getPublicUrl(avatarPath);
 
         // ================= IMAGE =================
         return ClipOval(
           child: CachedNetworkImage(
-            imageUrl: imageUrl,
+            imageUrl: avatar,
             width: size,
             height: size,
             fit: BoxFit.cover,
 
-            // 🔥 Prevent old cached image
             useOldImageOnUrlChange: false,
 
             placeholder: (context, url) => Container(

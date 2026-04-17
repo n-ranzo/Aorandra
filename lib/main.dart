@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/theme/theme_controller.dart';
 import "features/auth/ui/auth_gate.dart";
+import 'package:aorandra/shared/services/user_manager.dart';
 
 // ================================
 // MAIN ENTRY POINT
@@ -31,6 +32,8 @@ Future<void> main() async {
     url: 'https://nlqhjqlgvmrrfrtpzcrc.supabase.co',
     anonKey: 'sb_publishable_9VHGrLgJCB7o9OfuTOBEQg_jbpSxlUr',
   );
+  
+  UserManager.instance.listenToProfileChanges();
 
   // Register ThemeController as a singleton using GetX
   Get.put(ThemeController());

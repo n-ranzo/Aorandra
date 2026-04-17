@@ -157,16 +157,16 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final userId = user.id;
 
     // ============================
-    // ✅ FETCH USER FROM PROFILES (FIXED)
+    // FETCH USER FROM PROFILES (FIXED)
     // ============================
     final userData = await supabase
-        .from('profiles') // 🔥 FIX
-        .select('username, avatar_url') // 🔥 FIX
+        .from('profiles') 
+        .select('username, avatar_url') 
         .eq('id', userId)
         .single();
 
     final username = userData['username'] ?? "User";
-    final userImage = userData['avatar_url'] ?? ""; // 🔥 FIX
+    final userImage = userData['avatar_url'] ?? ""; 
 
     List<String> uploadedUrls = [];
 

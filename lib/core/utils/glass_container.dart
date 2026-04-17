@@ -40,7 +40,7 @@ class GlassContainer extends StatelessWidget {
     if (!glassOn) {
       return Padding(
         padding: padding ??
-            EdgeInsets.symmetric(
+            const EdgeInsets.symmetric(
               horizontal: UIController.topBottomHorizontalPadding,
             ),
         child: child,
@@ -49,7 +49,7 @@ class GlassContainer extends StatelessWidget {
 
     return Padding(
       padding: padding ??
-          EdgeInsets.symmetric(
+          const EdgeInsets.symmetric(
             horizontal: UIController.topBottomHorizontalPadding,
           ),
       child: RepaintBoundary(
@@ -97,7 +97,7 @@ class GlassContainer extends StatelessWidget {
                               )
                             : Colors.black.withOpacity(0.08),
                         blurRadius: UIController.shadowBlur,
-                        offset: Offset(
+                        offset: const Offset(
                           0,
                           UIController.shadowOffsetY,
                         ),

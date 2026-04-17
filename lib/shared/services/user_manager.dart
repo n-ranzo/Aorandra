@@ -1,38 +1,76 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// UserManager
+/// ------------------------------------------------------------
+/// A global singleton service responsible for:
+/// - Caching user profiles locally
+/// - Providing fast access to user data (username, avatar, etc.)
+/// - Syncing profile updates in real-time using Supabase Realtime
+/// - Notifying UI listeners when data changes
+///
+/// This replaces repeated database calls (FutureBuilder)
+/// and significantly improves performance across the app.
 class UserManager extends ChangeNotifier {
-  // ================= SINGLETON =================
-  static final UserManager instance = UserManager._();
-  UserManager._();
+  // ============================================================
+  // SINGLETON SETUP
+  // ============================================================
 
-  final supabase = Supabase.instance.client;
+  static final UserManager instance = UserManager._internal();
+  UserManager._internal();
 
-  // ================= CACHE =================
-  /// Stores users locally (id -> user data)
+  final SupabaseClient supabase = Supabase.instance.client;
+
+  // ============================================================
+  // LOCAL CACHE
+  // ============================================================
+
+  /// Stores user data in memory
+  /// Key: userId
+  /// Value: user object (Map)
   final Map<String, Map<String, dynamic>> _users = {};
 
-  // ================= SET SINGLE USER =================
-  /// Add or replace a single user in cache
+  // ============================================================
+  // 🔥 SAFE NOTIFY (الحل)
+  // ============================================================
+
+  void _safeNotify() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyListeners();
+    });
+  }
+
+  // ============================================================
+  // SET SINGLE USER
+  // ============================================================
+
+  /// Inserts or replaces a single user in cache
   void setUser(String userId, Map<String, dynamic> data) {
     _users[userId] = data;
-    notifyListeners(); // 🔥 update UI
+    _safeNotify(); // ✅ FIX
   }
 
-  // ================= SET MULTIPLE USERS =================
-  /// Add multiple users at once (used on app start / fetch)
+  // ============================================================
+  // SET MULTIPLE USERS
+  // ============================================================
+
+  /// Inserts a list of users into cache (used on app start)
   void setUsers(List users) {
-    for (var u in users) {
-      final id = u['id']?.toString();
+    for (var user in users) {
+      final id = user['id']?.toString();
       if (id != null) {
-        _users[id] = u;
+        _users[id] = user;
       }
     }
-    notifyListeners(); // 🔥 update UI
+    _safeNotify(); // ✅ FIX
   }
 
-  // ================= UPDATE USER =================
-  /// Merge new data into existing user (Realtime updates)
+  // ============================================================
+  // UPDATE USER
+  // ============================================================
+
+  /// Merges new data into an existing cached user
+  /// If user does not exist, it will be created
   void updateUser(String userId, Map<String, dynamic> newData) {
     if (_users.containsKey(userId)) {
       _users[userId] = {
@@ -43,37 +81,41 @@ class UserManager extends ChangeNotifier {
       _users[userId] = newData;
     }
 
-    notifyListeners(); // 🔥 realtime UI update
+    _safeNotify(); // ✅ FIX
   }
 
-  // ================= REMOVE USER =================
-  /// Remove user from cache
+  // ============================================================
+  // REMOVE USER
+  // ============================================================
+
+  /// Removes a user from cache
   void removeUser(String userId) {
     _users.remove(userId);
-    notifyListeners();
+    _safeNotify(); // ✅ FIX
   }
 
-  // ================= GET USER =================
-  /// Get full user object
+  // ============================================================
+  // GETTERS
+  // ============================================================
+
+  /// Returns full user object
   Map<String, dynamic>? getUser(String userId) {
     return _users[userId];
   }
 
-  // ================= GET ALL USERS =================
-  /// Get all cached users
+  /// Returns all cached users
   List<Map<String, dynamic>> getAllUsers() {
     return _users.values.toList();
   }
 
-  // ================= GET USERNAME =================
-  /// Safe username getter
+  /// Returns username safely
   String getUsername(String userId) {
     final user = _users[userId];
     return (user?['username'] ?? 'User').toString();
   }
 
-  // ================= GET AVATAR =================
-  /// 🔥 FIXED: Uses avatar_url instead of old 'image'
+  /// Returns avatar URL safely
+  /// Ensures it is a valid HTTP URL
   String getAvatar(String userId) {
     final user = _users[userId];
 
@@ -81,7 +123,6 @@ class UserManager extends ChangeNotifier {
         .toString()
         .trim();
 
-    // Validate URL
     if (avatar.isEmpty ||
         avatar == 'null' ||
         !avatar.toLowerCase().startsWith('http')) {
@@ -91,13 +132,22 @@ class UserManager extends ChangeNotifier {
     return avatar;
   }
 
-  // ================= REALTIME LISTENER =================
-  /// Listen to profile updates from Supabase (Realtime)
+  // ============================================================
+  // REALTIME SYNC
+  // ============================================================
+
+  bool _isListening = false;
+
+  /// Subscribes to real-time updates on profiles table
+  /// This keeps the cache in sync instantly when any profile changes
   void listenToProfileChanges() {
+    if (_isListening) return;
+    _isListening = true;
+
     supabase
         .channel('profiles_realtime')
         .onPostgresChanges(
-          event: PostgresChangeEvent.update,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'profiles',
           callback: (payload) {
@@ -106,17 +156,19 @@ class UserManager extends ChangeNotifier {
             final userId = newData['id']?.toString();
             if (userId == null) return;
 
-            // 🔥 update cache instantly
             updateUser(userId, newData);
           },
         )
         .subscribe();
   }
 
-  // ================= CLEAR CACHE =================
-  /// Clear all cached users (logout / refresh)
+  // ============================================================
+  // CLEAR CACHE
+  // ============================================================
+
+  /// Clears all cached users (use on logout)
   void clear() {
     _users.clear();
-    notifyListeners();
+    _safeNotify(); 
   }
 }

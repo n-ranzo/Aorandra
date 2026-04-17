@@ -32,7 +32,7 @@ class StoriesBar extends StatelessWidget {
         Expanded(
           child: StreamBuilder(
             stream: supabase
-                .from('profiles') // 🔥 FIX
+                .from('profiles') 
                 .stream(primaryKey: ['id']),
             builder: (context, snapshot) {
 
@@ -49,7 +49,7 @@ class StoriesBar extends StatelessWidget {
 
                   return _storyItem(
                     name: userData["username"] ?? "User",
-                    imageUrl: userData["avatar_url"] ?? "", // 🔥 FIX
+                    imageUrl: userData["avatar_url"] ?? "", 
                   );
                 },
               );
