@@ -32,9 +32,9 @@ class FeedService {
     return posts;
   }
 
-  Future<void> toggleLike(String videoId, bool isLiked) async {
+  Future<void> toggleLike(String videoId, {required bool wasLiked}) async {
     final userId = _db.auth.currentUser!.id;
-    if (isLiked) {
+    if (wasLiked) {
       await _db.from('likes').delete().match({'user_id': userId, 'video_id': videoId});
       await _db.rpc('decrement_likes', params: {'video_id': videoId});
     } else {

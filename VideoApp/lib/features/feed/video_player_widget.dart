@@ -99,7 +99,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                     color: AppColors.overlay,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.pause, color: Colors.white, size: 40),
+                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 40),
                 ),
               ),
             ),

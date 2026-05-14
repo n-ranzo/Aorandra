@@ -62,7 +62,7 @@ class _UploadScreenState extends State<UploadScreen> {
     try {
       final db = Supabase.instance.client;
       final userId = db.auth.currentUser!.id;
-      final fileName = '\${userId}_\${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
 
       await db.storage.from('videos').upload(
         fileName,
@@ -96,7 +96,7 @@ class _UploadScreenState extends State<UploadScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ: \$e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {

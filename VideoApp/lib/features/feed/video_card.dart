@@ -29,16 +29,18 @@ class _VideoCardState extends State<VideoCard> {
   }
 
   Future<void> _toggleLike() async {
+    final previouslyLiked = _isLiked;
     setState(() {
       _isLiked = !_isLiked;
       _likesCount += _isLiked ? 1 : -1;
     });
     try {
-      await _feedService.toggleLike(widget.post.id, !_isLiked);
+      await _feedService.toggleLike(widget.post.id, wasLiked: previouslyLiked);
     } catch (_) {
+      // rollback on failure
       setState(() {
-        _isLiked = !_isLiked;
-        _likesCount += _isLiked ? 1 : -1;
+        _isLiked = previouslyLiked;
+        _likesCount += previouslyLiked ? 1 : -1;
       });
     }
   }
@@ -91,7 +93,7 @@ class _VideoCardState extends State<VideoCard> {
                     _buildAvatar(),
                     const SizedBox(width: 10),
                     Text(
-                      '@\${widget.post.author?.username ?? 'user'}',
+                      '@${widget.post.author?.username ?? 'user'}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -157,8 +159,8 @@ class _VideoCardState extends State<VideoCard> {
   }
 
   String _formatCount(int count) {
-    if (count >= 1000000) return '\${(count / 1000000).toStringAsFixed(1)}M';
-    if (count >= 1000) return '\${(count / 1000).toStringAsFixed(1)}K';
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
     return count.toString();
   }
 }
